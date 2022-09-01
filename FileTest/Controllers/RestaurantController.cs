@@ -27,13 +27,13 @@ namespace FileTest.Controllers
     /// </summary>
     public class OdsController : ApiController
     {
-      
-        public OdsController() { 
-            //SqlConn sqlCon = new SqlConn();
-    }
-       
+        public SqlConn sqlConn;
+        public SqlConnection myConnection = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString);
 
-
+        public OdsController()
+        {
+         sqlConn = new SqlConn();
+        }
         public static HttpResponseMessage FileResult(string filePath, string mime = "application/octet-stream")
         {
             var result = new HttpResponseMessage(HttpStatusCode.OK)
@@ -48,48 +48,75 @@ namespace FileTest.Controllers
             return result;
         }
 
+    
 
-        //private IDbConnection _db = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString);
+            [Route("get/import")]
+            public void GetImport()
+            {
+            Calc.LogPath = @"D:\log";
+            var path = @"D:\test.ods";
+            using (var calc = new Calc(path))
+            {
+            string conStr = @"INSERT INTO Info (Name, Food) VALUES(123, 123)";
+            int result = myConnection.Execute(conStr);
+            }
+            
+        
+            }
 
-
-        // DOWNLOAD api/ods
-        //[Route("get/database")]
-        //public List<dynamic> GetDataBase()
-        //{
-        //    using (var tmpCon = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString))
-        //    {
-        //        tmpCon.Open();
-        //        var StudentList = tmpCon.Query("Select * From dbo.Info").ToList();
-        //        return StudentList;
-        //    }
-        //}
-
-        //DOWNLOAD api/ods
-        [Route("get/database")]
-        public List<dynamic> GetDataBase()
+        /// <summary>
+        /// 資料庫資料匯出到 Ods 檔案
+        /// </summary>
+        /// <returns></returns>
+        [Route("get/export")]
+        public HttpResponseMessage GetExport()
         {
-            var conStr =
-            @"
-            SELECT * 
-            FROM dbo.Info 
-            Where Id = 2
-            ";
-            var sqlCon = new SqlConn();
-            var database = sqlCon.DbQuery(conStr);
-            return database;
-        }
+            Calc.LogPath = @"D:\log";
+            var outputPath = @"D:\New.ods";
+            using (var calc = new Calc())
+            {
+                var tb = calc.Tables.AddNew("新的工作表");
+                // 樣式
+                Font headerFont = new Font("標楷體", 28, FontStyle.Bold),
+                colFont = new Font("標楷體", 14, FontStyle.Bold),
+                rowFont = new Font("標楷體", 12);
 
+                var line = new Line() { Color = Color.Black, OuterWidth = 20 };
+                var conStr =
+                @"
+                SELECT * 
+                FROM dbo.Info 
+                ";
 
-        // DOWNLOAD api/ods
-        [Route("get/download")]
-        public HttpResponseMessage GetDownload()
-        {
-            var outputPath = @"D:\output.ods";
+                int header = 0;
+                int row = 0;
+                int column = 0;
+                var dataset = sqlConn.DbQuery(conStr);
+                foreach (var columnData in dataset)
+                {
+                    foreach (var field in columnData)
+                    {
+                        if (column <= header)
+                        {
+                        tb[column, row].Formula = field.Key;
+                        }
+                        tb[column+1, row].Formula = Convert.ToString(field.Value);
+                        row ++;
+                    }
+                    column ++;
+                    row = 0;
+                }
+
+                calc.SaveAs(outputPath);
+                calc.Close();
+            }
             return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
 
-        // GET api/ods
+        /// <summary>
+        /// 修改本地 Ods 檔案
+        /// </summary>
         [Route("get/ods")]
         public void Get()
         {
@@ -108,8 +135,23 @@ namespace FileTest.Controllers
                 tb[startRow, 3].Formula = "12345";
                 calc.SaveAs(outputPath);
                 calc.Close();
-                //return HttpHelper.FileResult(filePath, "application/vnd.oasis.opendocument.spreadsheet");
             }
+        }
+
+        /// <summary>
+        /// 取得資料庫資料
+        /// </summary>
+        /// <returns></returns>
+        [Route("get/database")]
+        public IEnumerable<dynamic> GetDataBase()
+        {
+            var conStr =
+            @"
+            SELECT * 
+            FROM dbo.Info 
+            ";
+            var data = sqlConn.DbQuery(conStr);
+            return data;
         }
 
         // GET api/values/5
