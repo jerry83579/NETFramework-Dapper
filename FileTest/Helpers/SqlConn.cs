@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using FileTest.Models;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -31,12 +32,12 @@ namespace FileTest.Helpers
             }
         }
 
-        public int DbExecute(string conStr)
+        public int DbExecute(string conStr, List<Info> insertData)
         {
             try
             {
                 myConnection.Open();
-                var result = myConnection.Execute(conStr);
+                int result = myConnection.Execute(conStr, insertData);
                 myConnection.Close();
                 return result;
             }

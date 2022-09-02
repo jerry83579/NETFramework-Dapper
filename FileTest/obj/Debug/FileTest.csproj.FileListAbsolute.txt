@@ -213,3 +213,5 @@ D:\c#\FileTest\FileTest\bin\zh-Hant\System.Spatial.resources.dll
 D:\c#\FileTest\FileTest\bin\Dapper.dll
 D:\c#\FileTest\FileTest\bin\Dapper.pdb
 D:\c#\FileTest\FileTest\bin\Microsoft.SqlServer.Types.dll
+D:\c#\FileTest\FileTest\bin\NetTopologySuite.dll
+D:\c#\FileTest\FileTest\bin\NetTopologySuite.xml

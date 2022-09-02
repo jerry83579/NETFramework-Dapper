@@ -1,24 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
 using OpenDocumentLib.sheet;
 using System.Drawing;
 using System.Web.Http;
-using OfficeDevPnP.Core.Utilities;
-using System.Threading.Tasks;
 using System.IO;
 using System.Net.Http.Headers;
-using System.Web;
-using Microsoft.Graph;
-using System.Data.Common;
-using System.Configuration;
-using System.Data;
 using FileTest.Models;
-using System.Data.SqlClient;
 using FileTest.Helpers;
-using Dapper;
+using System.Data.Spatial;
 
 namespace FileTest.Controllers
 {
@@ -28,7 +19,7 @@ namespace FileTest.Controllers
     public class OdsController : ApiController
     {
         public SqlConn sqlConn;
-        public SqlConnection myConnection = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString);
+        //public SqlConnection myConnection = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString);
 
         public OdsController()
         {
@@ -48,21 +39,45 @@ namespace FileTest.Controllers
             return result;
         }
 
-    
 
             [Route("get/import")]
             public void GetImport()
             {
             Calc.LogPath = @"D:\log";
-            var path = @"D:\test.ods";
+            var path = @"D:\New.ods";
+            var row = 1;
             using (var calc = new Calc(path))
             {
-            string conStr = @"INSERT INTO Info (Name, Food) VALUES(123, 123)";
-            int result = myConnection.Execute(conStr);
+            var workSheet = calc.Tables[1];
+            int columnsLength = workSheet.ColumnCount-1;
+            int rowsLength = workSheet.RowCount-1;
+            string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
+            var data = new List<Info>();
+                //GeometryPoint.Create(1, 2)
+                string redmond = "POINT (122.1215 47.6740)";
+                DbGeometry point = DbGeometry.PointFromText(redmond,
+                DbGeometry.DefaultCoordinateSystemId);
+                for (int i = 0; i < columnsLength - 1; i++)
+            {
+                    data.Add(new Info()
+                    {
+                        Name = workSheet[row, 1].Formula,
+                        Food = workSheet[row, 2].Formula,
+                        Address = workSheet[row, 3].Formula,
+                        Phone = workSheet[row, 4].Formula,
+                        Lat = workSheet[row, 5].Formula.ToDouble(),
+                        Longitude = workSheet[row, 6].Formula.ToDouble(),
+                        Location = point
+
+                    });
+                    row++;
+                }
+            int result = sqlConn.DbExecute(conStr, data);
+            };
             }
             
         
-            }
+         
 
         /// <summary>
         /// 資料庫資料匯出到 Ods 檔案
@@ -92,19 +107,19 @@ namespace FileTest.Controllers
                 int row = 0;
                 int column = 0;
                 var dataset = sqlConn.DbQuery(conStr);
-                foreach (var columnData in dataset)
+                foreach (var rowData in dataset)
                 {
-                    foreach (var field in columnData)
+                    foreach (var field in rowData)
                     {
-                        if (column <= header)
+                        if (row <= header)
                         {
-                        tb[column, row].Formula = field.Key;
+                        tb[row, column].Formula = field.Key;
                         }
-                        tb[column+1, row].Formula = Convert.ToString(field.Value);
-                        row ++;
+                        tb[row + 1, column].Formula = Convert.ToString(field.Value);
+                        column ++;
                     }
-                    column ++;
-                    row = 0;
+                    row ++;
+                    column = 0;
                 }
 
                 calc.SaveAs(outputPath);
