@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.SqlServer.Types;
+using System;
 using System.Collections.Generic;
 using System.Data.Spatial;
 using System.Linq;
@@ -16,6 +17,6 @@ namespace FileTest.Models
         public string Phone { get; set; }
         public double? Lat { get; set; }
         public double? Longitude { get; set; }
-        public DbGeometry Location { get; set; }
+        public SqlGeometry Location { get; set; }
     }
 }
