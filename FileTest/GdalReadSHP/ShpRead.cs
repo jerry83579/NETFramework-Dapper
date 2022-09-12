@@ -34,15 +34,13 @@ namespace GdalReadSHP
         /// <summary>  
         /// 初始化Gdal  
         /// </summary>  
-        public void InitinalGdal()
+        public OSGeo.OGR.Driver InitinalGdal()
         {
             GdalConfiguration.ConfigureGdal();
             GdalConfiguration.ConfigureOgr();
-            Gdal.AllRegister();
-            // 爲了支持中文路徑  
             Gdal.SetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
-            // 爲了使屬性表字段支持中文  
             Gdal.SetConfigOption("SHAPE_ENCODING", "");
+            Gdal.AllRegister();
             Ogr.RegisterAll();
 
             oDerive = Ogr.GetDriverByName("ESRI Shapefile");
@@ -50,6 +48,7 @@ namespace GdalReadSHP
             {
                 //("文件不能打開，請檢查");
             }
+            return oDerive;
         }
 
         /// <summary>  

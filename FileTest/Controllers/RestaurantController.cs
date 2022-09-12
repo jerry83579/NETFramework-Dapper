@@ -15,11 +15,14 @@ using OSGeo.OSR;
 using Microsoft.SharePoint.Client;
 using OSGeo.GDAL;
 using FieldType = OSGeo.OGR.FieldType;
-using Driver = OSGeo.OGR.Driver;
 using Feature = OSGeo.OGR.Feature;
+using Driver = OSGeo.OGR.Driver;
 using System.Runtime.InteropServices;
 using Microsoft.SqlServer.Types;
 using System.Data.SqlTypes;
+using Microsoft.Graph;
+using OfficeDevPnP.Core.Framework.Provisioning.Model.Drive;
+using unoidl.com.sun.star.sdbc;
 
 namespace FileTest.Controllers
 {
@@ -30,13 +33,14 @@ namespace FileTest.Controllers
     {
         public SqlConn sqlConn;
         public ShpRead m_Shp;
-        public static Layer pLayer = null;
+        public static Driver pDriver;
+
         //public SqlConnection myConnection = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString);
 
         public OdsController()
         {
-         sqlConn = new SqlConn();
-         m_Shp = new ShpRead();
+            sqlConn = new SqlConn();
+            m_Shp = new ShpRead();
         }
 
         //ods
@@ -65,26 +69,92 @@ namespace FileTest.Controllers
         /// <param name="geometryType"></param>
         /// <param name="spatialReference"></param>
         /// <returns></returns>
-        public  static Layer CreateLayer(string filePath, wkbGeometryType geometryType, SpatialReference spatialReference)
+        public static Layer CreateLayer(string direPath, wkbGeometryType geometryType, SpatialReference spatialReference, OSGeo.OGR.Driver pDriver)
         {
+            Layer pLayer = null;
+            string[] options = { "ENCODING=UTF-8" };
             // 數據源
-            Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
-            DataSource pDataSource = pDriver.CreateDataSource(filePath, null);
+            DataSource dataSource = pDriver.CreateDataSource(direPath, options);
+
 
             // 創建圖層
             if (geometryType == wkbGeometryType.wkbPoint)
             {
-                pLayer = pDataSource.CreateLayer(Path.GetFileNameWithoutExtension(filePath), spatialReference, wkbGeometryType.wkbPoint, null);
+                pLayer = dataSource.CreateLayer(Path.GetFileNameWithoutExtension(direPath), spatialReference, wkbGeometryType.wkbPoint, new string[] { "ENCODING=UTF-8" });
             }
             else if (geometryType == wkbGeometryType.wkbLineString)
             {
-                pLayer = pDataSource.CreateLayer(Path.GetFileNameWithoutExtension(filePath), spatialReference, wkbGeometryType.wkbLineString, null);
+                pLayer = dataSource.CreateLayer(Path.GetFileNameWithoutExtension(direPath), spatialReference, wkbGeometryType.wkbLineString, new string[] { "ENCODING=UTF-8" });
             }
             else
             {
-                pLayer = pDataSource.CreateLayer(Path.GetFileNameWithoutExtension(filePath), spatialReference, wkbGeometryType.wkbPolygon, null);
+                pLayer = dataSource.CreateLayer(Path.GetFileNameWithoutExtension(direPath), spatialReference, wkbGeometryType.wkbPolygon, new string[] { "ENCODING=UTF-8" });
             }
             return pLayer;
+        }
+
+        ///// <summary>
+        ///// 創建欄位
+        ///// </summary>
+        ///// <param name="pLayer"></param>
+        //public static void CreateFields(Layer pLayer)
+        //{
+        //    Layer pLayer = null;
+
+        //    //創建欄位
+        //    FieldDefn pFieldDefn = new FieldDefn("A", FieldType.OFTString);
+        //    pFieldDefn.SetWidth(200);
+        //    pLayer.CreateField(pFieldDefn, 1);
+
+        //    pFieldDefn = new FieldDefn("B", FieldType.OFTString);
+        //    pFieldDefn.SetWidth(200);
+        //    pLayer.CreateField(pFieldDefn, 1);
+
+        //    pFieldDefn = new FieldDefn("C", FieldType.OFTString);
+        //    pFieldDefn.SetWidth(200);
+        //    pLayer.CreateField(pFieldDefn, 1);
+        //}
+
+
+        /// <summary>
+        /// 欄位插入值
+        /// </summary>
+        /// <param name="filePath"></param>
+        public static void InsertFeatures(string filePath, string testPath)
+        {
+            // 数据源
+            Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
+            DataSource pDataSource = pDriver.Open(filePath, 1);
+            Layer pLayer = pDataSource.GetLayerByName(Path.GetFileNameWithoutExtension(testPath));
+
+            //獲得欄位索引值來新增資料
+            FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
+            int fieldIndex_A = pFeatureDefn.GetFieldIndex("A");
+            int fieldIndex_B = pFeatureDefn.GetFieldIndex("B");
+            int fieldIndex_C = pFeatureDefn.GetFieldIndex("C");
+
+            // 插入要素
+            Feature pFeature = new Feature(pFeatureDefn);
+            Geometry geometry = Geometry.CreateFromWkt("POINT(203537 2636875)");
+            pFeature.SetGeometry(geometry);
+            pFeature.SetField(fieldIndex_A, "1");
+            pFeature.SetField(fieldIndex_B, "SADFFDS");
+            pFeature.SetField(fieldIndex_C, "SADFSADF");
+            pLayer.CreateFeature(pFeature);
+
+            geometry = Geometry.CreateFromWkt("POINT(203537 2536875)");
+            pFeature.SetGeometry(geometry);
+            pFeature.SetField(fieldIndex_A, "2");
+            pFeature.SetField(fieldIndex_B, "食物B");
+            pFeature.SetField(fieldIndex_C, "北平路");
+            pLayer.CreateFeature(pFeature);
+
+            geometry = Geometry.CreateFromWkt("POINT(11 110)");
+            pFeature.SetGeometry(geometry);
+            pFeature.SetField(fieldIndex_A, "3");
+            pFeature.SetField(fieldIndex_B, "食物C");
+            pFeature.SetField(fieldIndex_C, "河南路");
+            pLayer.CreateFeature(pFeature);
         }
 
         //========================================================================= Import & Export =========================================================================
@@ -94,57 +164,80 @@ namespace FileTest.Controllers
         [Route("get/exportShp")]
         public void GetExportShp()
         {
-            string filePath = @"D:\shapefile";
-            string newPath = @"D:\shapefile\shapefile.shp";
-            m_Shp.InitinalGdal();
-            //創建圖層
-            CreateLayer(filePath, wkbGeometryType.wkbPoint, null);
+            // 初始化
+            string direPath = @"D:\shapefile";
+            GdalConfiguration.ConfigureGdal();
+            GdalConfiguration.ConfigureOgr();
+            Gdal.SetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
+            Gdal.SetConfigOption("SHAPE_ENCODING", "");
+            Gdal.AllRegister();
+            Ogr.RegisterAll();
+            pDriver = Ogr.GetDriverByName("ESRI Shapefile");
+            SpatialReference sr = new SpatialReference("");
 
-            //獲取數據源
-            Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
-            DataSource pDataSource = pDriver.Open(newPath, 1);
+            // 創建圖層
+            Layer pLayer = CreateLayer(direPath, wkbGeometryType.wkbPoint, sr, pDriver);
 
-            //創建欄位
-            FieldDefn pFieldDefn = new FieldDefn("X", FieldType.OFTString);
+            // 創建欄位
+            FieldDefn pFieldDefn = new FieldDefn("Id", FieldType.OFTInteger);
             pFieldDefn.SetWidth(200);
             pLayer.CreateField(pFieldDefn, 1);
 
-            pFieldDefn = new OSGeo.OGR.FieldDefn("Y", FieldType.OFTString);
+            pFieldDefn = new FieldDefn("Name", FieldType.OFTString);
             pFieldDefn.SetWidth(200);
             pLayer.CreateField(pFieldDefn, 1);
 
-            pFieldDefn = new OSGeo.OGR.FieldDefn("C", FieldType.OFTString);
+            pFieldDefn = new FieldDefn("Food", FieldType.OFTString);
             pFieldDefn.SetWidth(200);
             pLayer.CreateField(pFieldDefn, 1);
 
-            //獲得欄位索引值來新增資料
-            OSGeo.OGR.FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
-            int fieldIndex_A = pFeatureDefn.GetFieldIndex("X");
-            int fieldIndex_B = pFeatureDefn.GetFieldIndex("Y");
-            int fieldIndex_C = pFeatureDefn.GetFieldIndex("Z");
+            pFieldDefn = new FieldDefn("Address", FieldType.OFTString);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
 
-            // 插入要素
-            OSGeo.OGR.Feature pFeature = new Feature(pFeatureDefn);
-            OSGeo.OGR.Geometry geometry = Geometry.CreateFromWkt("POINT(203537 2636875)");
-            pFeature.SetGeometry(geometry);
-            pFeature.SetField(fieldIndex_A, "11");
-            pFeature.SetField(fieldIndex_B, "1");
-            pFeature.SetField(fieldIndex_C, "张三");
-            pLayer.CreateFeature(pFeature);
+            pFieldDefn = new FieldDefn("Phone", FieldType.OFTString);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
 
-            //geometry = Geometry.CreateFromWkt("POINT(203537 2536875)");
-            //pFeature.SetGeometry(geometry);
-            //pFeature.SetField(fieldIndex_A, "12");
-            //pFeature.SetField(fieldIndex_B, "2");
-            //pFeature.SetField(fieldIndex_C, "张四");
-            //pLayer.CreateFeature(pFeature);
-            //i++;
-            ////geometry = Geometry.CreateFromWkt("POINT(11 110)");
-            ////pFeature.SetGeometry(geometry);
-            ////pFeature.SetField(fieldIndex_A, 1);
-            ////pFeature.SetField(fieldIndex_B, "211032");
-            ////pFeature.SetField(fieldIndex_C, "李四");
-            ////pLayer.CreateFeature(pFeature);
+            pFieldDefn = new FieldDefn("Lat", FieldType.OFTReal);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
+
+            pFieldDefn = new FieldDefn("Longitude", FieldType.OFTReal);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
+
+            // 獲得欄位索引值來新增資料
+            FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
+            int fieldId = pFeatureDefn.GetFieldIndex("Id");
+            int fieldName = pFeatureDefn.GetFieldIndex("Name");
+            int fieldFood = pFeatureDefn.GetFieldIndex("Food");
+            int fieldAddress = pFeatureDefn.GetFieldIndex("Address"); ;
+            int fieldPhone = pFeatureDefn.GetFieldIndex("Phone");
+            int fieldLat = pFeatureDefn.GetFieldIndex("Lat");
+            int fieldLongitude = pFeatureDefn.GetFieldIndex("Longitude");
+
+            // 獲取資料庫資料後 / 插入要素 
+            var conStr = @" SELECT * FROM dbo.Info";
+            var dataset = sqlConn.DbQuery(conStr);
+
+            Feature pFeature = new Feature(pFeatureDefn);
+            foreach (var data in dataset)
+            {
+                Geometry geometry = Geometry.CreateFromWkt($"POINT({data.Lat} {data.Longitude})");
+                pFeature.SetGeometry(geometry);
+                pFeature.SetField(fieldId, data.Id);
+                pFeature.SetField(fieldName, data.Name);
+                pFeature.SetField(fieldFood, data.Food);
+                pFeature.SetField(fieldAddress, data.Address);
+                pFeature.SetField(fieldPhone, data.Phone);
+                pFeature.SetField(fieldLat, data.Lat);
+                pFeature.SetField(fieldLongitude, data.Longitude);
+                pLayer.CreateFeature(pFeature);
+                pLayer.SetFeature(pFeature);
+            }
+            pLayer.Dispose();
+            pDriver.Dispose();
         }
 
 
@@ -226,11 +319,11 @@ namespace FileTest.Controllers
             pDataSource.Dispose();
             //pDriver.DeleteDataSource(filePath);
             pDriver.Dispose();
-           
+
             string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Location) VALUES(@Name, @Food, @Address, @Phone, @Location)";
             var data = new List<Info>();
             int listDicLength = listDic.Count;
-            for (int i = 0; i< listDicLength; i++)
+            for (int i = 0; i < listDicLength; i++)
             {
                 data.Add(new Info()
                 {
@@ -239,7 +332,7 @@ namespace FileTest.Controllers
                     Address = listDic[i]["Address"].ToString(),
                     Phone = listDic[i]["Phone"].ToString(),
                     Location = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326)
-                }); 
+                });
             }
             sqlConn.DbExecute(conStr, data);
         }
@@ -248,19 +341,19 @@ namespace FileTest.Controllers
         /// ods
         /// </summary>
         [Route("get/import")]
-            public void GetImport()
-            {
+        public void GetImport()
+        {
             Calc.LogPath = @"D:\log";
             var path = @"D:\New.ods";
             var row = 1;
             using (var calc = new Calc(path))
             {
-            var workSheet = calc.Tables[1];
-            int columnsLength = workSheet.ColumnCount-2;
-            int rowsLength = workSheet.RowCount;
-            string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
-            var data = new List<Info>();
-                
+                var workSheet = calc.Tables[1];
+                int columnsLength = workSheet.ColumnCount - 2;
+                int rowsLength = workSheet.RowCount;
+                string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
+                var data = new List<Info>();
+
                 for (int i = 0; i < columnsLength; i++)
                 {
                     double Lat = workSheet[row, 5].Formula.ToDouble();
@@ -274,15 +367,15 @@ namespace FileTest.Controllers
                         Lat = Lat,
                         Longitude = Longitude,
                         Location = SqlGeometry.Point(Lat, Longitude, 4326)
-                });
+                    });
                     row++;
                 }
-            int result = sqlConn.DbExecute(conStr, data);
+                int result = sqlConn.DbExecute(conStr, data);
             };
-            }
-            
-        
-         
+        }
+
+
+
 
         /// <summary>
         /// 資料庫資料匯出到 Ods 檔案
@@ -318,12 +411,12 @@ namespace FileTest.Controllers
                     {
                         if (row <= header)
                         {
-                        tb[row, column].Formula = field.Key;
+                            tb[row, column].Formula = field.Key;
                         }
                         tb[row + 1, column].Formula = Convert.ToString(field.Value);
-                        column ++;
+                        column++;
                     }
-                    row ++;
+                    row++;
                     column = 0;
                 }
 
