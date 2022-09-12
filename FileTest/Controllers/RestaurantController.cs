@@ -34,6 +34,7 @@ namespace FileTest.Controllers
         public SqlConn sqlConn;
         public ShpRead m_Shp;
         public static Driver pDriver;
+        public static DataSource dataSource;
 
         //public SqlConnection myConnection = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString);
 
@@ -69,18 +70,19 @@ namespace FileTest.Controllers
         /// <param name="geometryType"></param>
         /// <param name="spatialReference"></param>
         /// <returns></returns>
-        public static Layer CreateLayer(string direPath, wkbGeometryType geometryType, SpatialReference spatialReference, OSGeo.OGR.Driver pDriver)
+        public static Layer CreateLayer(string direPath, wkbGeometryType geometryType, SpatialReference spatialReference)
         {
             Layer pLayer = null;
             string[] options = { "ENCODING=UTF-8" };
             // 數據源
-            DataSource dataSource = pDriver.CreateDataSource(direPath, options);
+            dataSource = pDriver.CreateDataSource(direPath, options);
 
 
             // 創建圖層
             if (geometryType == wkbGeometryType.wkbPoint)
             {
                 pLayer = dataSource.CreateLayer(Path.GetFileNameWithoutExtension(direPath), spatialReference, wkbGeometryType.wkbPoint, new string[] { "ENCODING=UTF-8" });
+              
             }
             else if (geometryType == wkbGeometryType.wkbLineString)
             {
@@ -176,7 +178,7 @@ namespace FileTest.Controllers
             SpatialReference sr = new SpatialReference("");
 
             // 創建圖層
-            Layer pLayer = CreateLayer(direPath, wkbGeometryType.wkbPoint, sr, pDriver);
+            Layer pLayer = CreateLayer(direPath, wkbGeometryType.wkbPoint, sr);
 
             // 創建欄位
             FieldDefn pFieldDefn = new FieldDefn("Id", FieldType.OFTInteger);
@@ -236,6 +238,9 @@ namespace FileTest.Controllers
                 pLayer.CreateFeature(pFeature);
                 pLayer.SetFeature(pFeature);
             }
+            pDriver.Register();
+            dataSource.FlushCache();
+            dataSource.Dispose();
             pLayer.Dispose();
             pDriver.Dispose();
         }

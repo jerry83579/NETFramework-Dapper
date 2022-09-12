@@ -140,22 +140,18 @@ namespace GdalReadSHP
                     {
                         case FieldType.OFTString:
                             string sFValue = oFeature.GetFieldAsString(sFeildName);
-                            string sTempType = "string";
                             FeildStringList.Add(sFValue);
                             break;
                         case FieldType.OFTReal:
                             double dFValue = oFeature.GetFieldAsDouble(sFeildName);
-                            sTempType = "float";
                             FeildStringList.Add(dFValue.ToString());
                             break;
                         case FieldType.OFTInteger:
                             int iFValue = oFeature.GetFieldAsInteger(sFeildName);
-                            sTempType = "int";
                             FeildStringList.Add(iFValue.ToString());
                             break;
                         default:
                             //sFValue = oFeature.GetFieldAsString(ChosenFeildIndex[iFeildIndex]);  
-                            sTempType = "string";
                             break;
                     }
                     #endregion
