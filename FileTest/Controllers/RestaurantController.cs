@@ -23,12 +23,20 @@ using System.Data.SqlTypes;
 using Microsoft.Graph;
 using OfficeDevPnP.Core.Framework.Provisioning.Model.Drive;
 using unoidl.com.sun.star.sdbc;
+using System.Reflection;
+using NLog;
+using System.Threading.Tasks;
+using System.Web.Mvc;
+using Microsoft.AspNetCore.Mvc;
+using RouteAttribute = System.Web.Http.RouteAttribute;
+using Microsoft.AspNetCore.Http;
 
 namespace FileTest.Controllers
 {
     /// <summary>
     /// 
     /// </summary>
+    /// 
     public class OdsController : ApiController
     {
         public SqlConn sqlConn;
@@ -82,7 +90,7 @@ namespace FileTest.Controllers
             if (geometryType == wkbGeometryType.wkbPoint)
             {
                 pLayer = dataSource.CreateLayer(Path.GetFileNameWithoutExtension(direPath), spatialReference, wkbGeometryType.wkbPoint, new string[] { "ENCODING=UTF-8" });
-              
+
             }
             else if (geometryType == wkbGeometryType.wkbLineString)
             {
@@ -343,13 +351,13 @@ namespace FileTest.Controllers
         }
 
         /// <summary>
-        /// ods
+        /// 上傳 ods
         /// </summary>
         [Route("get/import")]
-        public void GetImport()
+        public Task<IActionResult> GetImport(IFormCollection collection) 
         {
             Calc.LogPath = @"D:\log";
-            var path = @"D:\New.ods";
+            var path = @"L:\Temp\New.ods";
             var row = 1;
             using (var calc = new Calc(path))
             {
@@ -376,6 +384,9 @@ namespace FileTest.Controllers
                     row++;
                 }
                 int result = sqlConn.DbExecute(conStr, data);
+                var keys = collection.Keys;
+                var files = collection.Files;
+                return (Task<IActionResult>)files;
             };
         }
 
@@ -389,45 +400,56 @@ namespace FileTest.Controllers
         [Route("get/export")]
         public HttpResponseMessage GetExport()
         {
-            Calc.LogPath = @"D:\log";
+        Logger _logger = LogManager.GetCurrentClassLogger();
+        Calc.LogPath = @"D:\log";
             var outputPath = @"D:\New.ods";
+
             using (var calc = new Calc())
             {
-                var tb = calc.Tables.AddNew("新的工作表");
-                // 樣式
-                Font headerFont = new Font("標楷體", 28, FontStyle.Bold),
-                colFont = new Font("標楷體", 14, FontStyle.Bold),
-                rowFont = new Font("標楷體", 12);
+                try
+                {
+                    var tb = calc.Tables.AddNew("新的工作表");
+                    // 樣式
+                    Font headerFont = new Font("標楷體", 28, FontStyle.Bold),
+                    colFont = new Font("標楷體", 14, FontStyle.Bold),
+                    rowFont = new Font("標楷體", 12);
 
-                var line = new Line() { Color = Color.Black, OuterWidth = 20 };
-                var conStr =
-                @"
+                    var line = new Line() { Color = Color.Black, OuterWidth = 20 };
+                    var conStr =
+                    @"
                 SELECT * 
                 FROM dbo.Info 
                 ";
 
-                int header = 0;
-                int row = 0;
-                int column = 0;
-                var dataset = sqlConn.DbQuery(conStr);
-                foreach (var rowData in dataset)
-                {
-                    foreach (var field in rowData)
+                    int header = 0;
+                    int row = 0;
+                    int column = 0;
+                    var dataset = sqlConn.DbQuery(conStr);
+                    foreach (var rowData in dataset)
                     {
-                        if (row <= header)
+                        foreach (var field in rowData)
                         {
-                            tb[row, column].Formula = field.Key;
+                            if (row <= header)
+                            {
+                                tb[row, column].Formula = field.Key;
+                            }
+                            tb[row + 1, column].Formula = Convert.ToString(field.Value);
+                            column++;
                         }
-                        tb[row + 1, column].Formula = Convert.ToString(field.Value);
-                        column++;
+                        row++;
+                        column = 0;
                     }
-                    row++;
-                    column = 0;
+                    calc.SaveAs(outputPath);
+                    calc.Close();
                 }
-
-                calc.SaveAs(outputPath);
-                calc.Close();
+                catch (Exception e)
+                {
+                    _logger.Error("[Error in ClientController.Edit - id: " + " - Error: " + e.Message + "]");
+                    /// add redirect link here 
+                }
             }
+
+
             return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
@@ -438,21 +460,30 @@ namespace FileTest.Controllers
         [Route("get/ods")]
         public void Get()
         {
+            Logger _logger = LogManager.GetCurrentClassLogger();
             Calc.LogPath = @"D:\log";
             var path = @"D:\test.ods";
             var outputPath = @"D:\output.ods";
             using (var calc = new Calc(path))
             {
-                var tb = calc.Tables.AddNew("新的工作表");
-                // 樣式
-                Font headerFont = new Font("標楷體", 28, FontStyle.Bold),
-                colFont = new Font("標楷體", 14, FontStyle.Bold),
-                rowFont = new Font("標楷體", 12);
-                var line = new Line() { Color = Color.Black, OuterWidth = 20 };
-                int startRow = 0; // 要調整明細位置只要改這個數值就好了
-                tb[startRow, 3].Formula = "12345";
-                calc.SaveAs(outputPath);
-                calc.Close();
+                try
+                {
+                    var tb = calc.Tables.AddNew("新的工作表");
+                    // 樣式
+                    Font headerFont = new Font("標楷體", 28, FontStyle.Bold),
+                    colFont = new Font("標楷體", 14, FontStyle.Bold),
+                    rowFont = new Font("標楷體", 12);
+                    var line = new Line() { Color = Color.Black, OuterWidth = 20 };
+                    int startRow = 0; // 要調整明細位置只要改這個數值就好了
+                    tb[startRow, 3].Formula = "12345";
+                    calc.SaveAs(outputPath);
+                    calc.Close();
+                }
+                catch (Exception e)
+                {
+                    _logger.Error("[Error in ClientController.Edit - id: " + " - Error: " + e.Message + "]");
+                    /// add redirect link here 
+                }
             }
         }
 
