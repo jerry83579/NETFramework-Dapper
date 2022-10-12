@@ -462,3 +462,6 @@ D:\cSharp\FileTest\FileTest\bin\Microsoft.AspNetCore.Mvc.Abstractions.xml
 D:\cSharp\FileTest\FileTest\bin\Microsoft.AspNetCore.Routing.Abstractions.xml
 D:\cSharp\FileTest\FileTest\bin\Microsoft.Extensions.Primitives.xml
 D:\cSharp\FileTest\FileTest\bin\Microsoft.Net.Http.Headers.xml
+D:\cSharp\FileTest\FileTest\bin\System.Web.Cors.dll
+D:\cSharp\FileTest\FileTest\bin\System.Web.Http.Cors.dll
+D:\cSharp\FileTest\FileTest\bin\System.Web.Http.Cors.xml

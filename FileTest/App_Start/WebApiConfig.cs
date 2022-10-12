@@ -9,6 +9,8 @@ namespace FileTest
     {
         public static void Register(HttpConfiguration config)
         {
+            // 啟用網域存取
+            config.EnableCors();
             // Web API 設定和服務
             GlobalConfiguration.Configuration.Formatters.XmlFormatter.SupportedMediaTypes.Clear();
             // Web API 路由

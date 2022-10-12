@@ -30,13 +30,19 @@ using System.Web.Mvc;
 using Microsoft.AspNetCore.Mvc;
 using RouteAttribute = System.Web.Http.RouteAttribute;
 using Microsoft.AspNetCore.Http;
+using System.Web.Http.Cors;
+using HttpPostAttribute = System.Web.Http.HttpPostAttribute;
+using System.Web;
+using HttpContext = System.Web.HttpContext;
+using Newtonsoft.Json.Linq;
+using Directory = System.IO.Directory;
+using System.Text;
+using System.Collections.ObjectModel;
+using FormCollection = System.Web.Mvc.FormCollection;
 
 namespace FileTest.Controllers
 {
-    /// <summary>
-    /// 
-    /// </summary>
-    /// 
+    [EnableCors(origins: "*", headers: "*", methods: "*", SupportsCredentials = true)]
     public class OdsController : ApiController
     {
         public SqlConn sqlConn;
@@ -353,57 +359,56 @@ namespace FileTest.Controllers
         /// <summary>
         /// 上傳 ods
         /// </summary>
-        [Route("get/import")]
-        public Task<IActionResult> GetImport(IFormCollection collection) 
+        [HttpPost]
+        [Route("post/uploadFile")]
+        public void GetUploadFile()
         {
-            Calc.LogPath = @"D:\log";
-            var path = @"L:\Temp\New.ods";
-            var row = 1;
-            using (var calc = new Calc(path))
+            var request = HttpContext.Current.Request;
+            string path;
+            if (request.Files.Count > 0)
             {
-                var workSheet = calc.Tables[1];
-                int columnsLength = workSheet.ColumnCount - 2;
-                int rowsLength = workSheet.RowCount;
-                string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
-                var data = new List<Info>();
-
-                for (int i = 0; i < columnsLength; i++)
+                var file = request.Files[0];
+                path = $@"L:\Temp\{file.FileName}";
+                Calc.LogPath = @"D:\log";
+                var row = 1;
+                using (var calc = new Calc(path))
                 {
-                    double Lat = workSheet[row, 5].Formula.ToDouble();
-                    double Longitude = workSheet[row, 6].Formula.ToDouble();
-                    data.Add(new Info()
+                    var workSheet = calc.Tables[1];
+                    int columnsLength = workSheet.ColumnCount - 2;
+                    int rowsLength = workSheet.RowCount;
+                    string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
+                    var data = new List<Info>();
+                    for (int i = 0; i < columnsLength; i++)
                     {
-                        Name = workSheet[row, 1].Formula,
-                        Food = workSheet[row, 2].Formula,
-                        Address = workSheet[row, 3].Formula,
-                        Phone = workSheet[row, 4].Formula,
-                        Lat = Lat,
-                        Longitude = Longitude,
-                        Location = SqlGeometry.Point(Lat, Longitude, 4326)
-                    });
-                    row++;
+                        double Lat = workSheet[row, 5].Formula.ToDouble();
+                        double Longitude = workSheet[row, 6].Formula.ToDouble();
+                        data.Add(new Info()
+                        {
+                            Name = workSheet[row, 1].Formula,
+                            Food = workSheet[row, 2].Formula,
+                            Address = workSheet[row, 3].Formula,
+                            Phone = workSheet[row, 4].Formula,
+                            Lat = Lat,
+                            Longitude = Longitude,
+                            Location = SqlGeometry.Point(Lat, Longitude, 4326)
+                        });
+                        row++;
+                    }
+                    int result = sqlConn.DbExecute(conStr, data);
                 }
-                int result = sqlConn.DbExecute(conStr, data);
-                var keys = collection.Keys;
-                var files = collection.Files;
-                return (Task<IActionResult>)files;
-            };
+            }
         }
 
-
-
-
         /// <summary>
-        /// 資料庫資料匯出到 Ods 檔案
+        /// 下載 Ods 檔案
         /// </summary>
         /// <returns></returns>
-        [Route("get/export")]
-        public HttpResponseMessage GetExport()
+        [HttpPost]
+        [Route("get/download")]
+        public HttpResponseMessage GetDownloadFile()
         {
-        Logger _logger = LogManager.GetCurrentClassLogger();
-        Calc.LogPath = @"D:\log";
-            var outputPath = @"D:\New.ods";
-
+           Calc.LogPath = @"D:\log";
+           var outputPath = @"L\New.ods";
             using (var calc = new Calc())
             {
                 try
@@ -417,9 +422,9 @@ namespace FileTest.Controllers
                     var line = new Line() { Color = Color.Black, OuterWidth = 20 };
                     var conStr =
                     @"
-                SELECT * 
-                FROM dbo.Info 
-                ";
+                    SELECT * 
+                    FROM dbo.Info 
+                    ";
 
                     int header = 0;
                     int row = 0;
@@ -444,12 +449,8 @@ namespace FileTest.Controllers
                 }
                 catch (Exception e)
                 {
-                    _logger.Error("[Error in ClientController.Edit - id: " + " - Error: " + e.Message + "]");
-                    /// add redirect link here 
                 }
             }
-
-
             return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
