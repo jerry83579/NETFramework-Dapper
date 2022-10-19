@@ -39,6 +39,7 @@ using Directory = System.IO.Directory;
 using System.Text;
 using System.Collections.ObjectModel;
 using FormCollection = System.Web.Mvc.FormCollection;
+using HttpGetAttribute = System.Web.Http.HttpGetAttribute;
 
 namespace FileTest.Controllers
 {
@@ -263,15 +264,19 @@ namespace FileTest.Controllers
         /// <summary>
         /// 獲取 Shp 資料寫入資料庫
         /// </summary>
-        [Route("get/importShp")]
-        public void GetImportShp()
+        [Route("post/uploadShp")]
+        [HttpPost]
+        public void UploadShp()
         {
-            string filePath = @"D:\shp\shop.shp";
+            var request = HttpContext.Current.Request;
+            var file = request.Files[0];
+            string path = $@"L:\Temp\{file.FileName}";
+           // string filePath = @"D:\shp\shop.shp";
             m_Shp.InitinalGdal();
             // 数据源
             Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
-            DataSource pDataSource = pDriver.Open(filePath, 0);
-            Layer pLayer = pDataSource.GetLayerByName(Path.GetFileNameWithoutExtension(filePath));
+            DataSource pDataSource = pDriver.Open(path, 0);
+            Layer pLayer = pDataSource.GetLayerByName(Path.GetFileNameWithoutExtension(path));
             pLayer.GetSpatialRef();
             // 字段结构
             Feature pFeature = pLayer.GetNextFeature();
@@ -359,9 +364,10 @@ namespace FileTest.Controllers
         /// <summary>
         /// 上傳 ods
         /// </summary>
+        [Route("post/uploadOds")]
         [HttpPost]
-        [Route("post/uploadFile")]
-        public void GetUploadFile()
+
+        public void uploadOds()
         {
             var request = HttpContext.Current.Request;
             string path;
@@ -378,7 +384,7 @@ namespace FileTest.Controllers
                     int rowsLength = workSheet.RowCount;
                     string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
                     var data = new List<Info>();
-                    for (int i = 0; i < columnsLength; i++)
+                    for (int i = 0; i < rowsLength-1; i++)
                     {
                         double Lat = workSheet[row, 5].Formula.ToDouble();
                         double Longitude = workSheet[row, 6].Formula.ToDouble();
@@ -403,12 +409,12 @@ namespace FileTest.Controllers
         /// 下載 Ods 檔案
         /// </summary>
         /// <returns></returns>
-        [HttpPost]
-        [Route("get/download")]
-        public HttpResponseMessage GetDownloadFile()
+        [Route("get/downloadOds")]
+        [HttpGet]
+        public HttpResponseMessage DownloadOds()
         {
            Calc.LogPath = @"D:\log";
-           var outputPath = @"L\New.ods";
+           var outputPath = @"L:\New.ods";
             using (var calc = new Calc())
             {
                 try
