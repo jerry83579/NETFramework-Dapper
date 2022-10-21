@@ -40,6 +40,10 @@ using System.Text;
 using System.Collections.ObjectModel;
 using FormCollection = System.Web.Mvc.FormCollection;
 using HttpGetAttribute = System.Web.Http.HttpGetAttribute;
+using System.Xml;
+using System.Xml.Linq;
+using System.Linq;
+using OfficeDevPnP.Core.Utilities;
 
 namespace FileTest.Controllers
 {
@@ -51,7 +55,9 @@ namespace FileTest.Controllers
         public static Driver pDriver;
         public static DataSource dataSource;
 
-        //public SqlConnection myConnection = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString);
+        //shp
+        [DllImport("gdal204.dll", EntryPoint = "OGR_F_GetFieldAsString", CallingConvention = CallingConvention.Cdecl)]
+        public static extern System.IntPtr OGR_F_GetFieldAsString(HandleRef handle, int index);
 
         public OdsController()
         {
@@ -59,7 +65,8 @@ namespace FileTest.Controllers
             m_Shp = new ShpRead();
         }
 
-        //ods
+        #region 下載檔案
+
         public static HttpResponseMessage FileResult(string filePath, string mime = "application/octet-stream")
         {
             var result = new HttpResponseMessage(HttpStatusCode.OK)
@@ -74,9 +81,9 @@ namespace FileTest.Controllers
             return result;
         }
 
-        //shp
-        [DllImport("gdal204.dll", EntryPoint = "OGR_F_GetFieldAsString", CallingConvention = CallingConvention.Cdecl)]
-        public extern static System.IntPtr OGR_F_GetFieldAsString(HandleRef handle, int index);
+        #endregion 下載檔案
+
+        #region 創建圖層
 
         /// <summary>
         /// 創建要素圖層
@@ -92,12 +99,10 @@ namespace FileTest.Controllers
             // 數據源
             dataSource = pDriver.CreateDataSource(direPath, options);
 
-
             // 創建圖層
             if (geometryType == wkbGeometryType.wkbPoint)
             {
                 pLayer = dataSource.CreateLayer(Path.GetFileNameWithoutExtension(direPath), spatialReference, wkbGeometryType.wkbPoint, new string[] { "ENCODING=UTF-8" });
-
             }
             else if (geometryType == wkbGeometryType.wkbLineString)
             {
@@ -110,33 +115,10 @@ namespace FileTest.Controllers
             return pLayer;
         }
 
-        ///// <summary>
-        ///// 創建欄位
-        ///// </summary>
-        ///// <param name="pLayer"></param>
-        //public static void CreateFields(Layer pLayer)
-        //{
-        //    Layer pLayer = null;
+        #endregion 創建圖層
 
-        //    //創建欄位
-        //    FieldDefn pFieldDefn = new FieldDefn("A", FieldType.OFTString);
-        //    pFieldDefn.SetWidth(200);
-        //    pLayer.CreateField(pFieldDefn, 1);
+        #region 新增點位
 
-        //    pFieldDefn = new FieldDefn("B", FieldType.OFTString);
-        //    pFieldDefn.SetWidth(200);
-        //    pLayer.CreateField(pFieldDefn, 1);
-
-        //    pFieldDefn = new FieldDefn("C", FieldType.OFTString);
-        //    pFieldDefn.SetWidth(200);
-        //    pLayer.CreateField(pFieldDefn, 1);
-        //}
-
-
-        /// <summary>
-        /// 欄位插入值
-        /// </summary>
-        /// <param name="filePath"></param>
         public static void InsertFeatures(string filePath, string testPath)
         {
             // 数据源
@@ -174,7 +156,10 @@ namespace FileTest.Controllers
             pLayer.CreateFeature(pFeature);
         }
 
-        //========================================================================= Import & Export =========================================================================
+        #endregion 新增點位
+
+        #region 讀取資料庫寫入Shp
+
         /// <summary>
         /// 讀取資料庫寫入 Shp
         /// </summary>
@@ -234,7 +219,7 @@ namespace FileTest.Controllers
             int fieldLat = pFeatureDefn.GetFieldIndex("Lat");
             int fieldLongitude = pFeatureDefn.GetFieldIndex("Longitude");
 
-            // 獲取資料庫資料後 / 插入要素 
+            // 獲取資料庫資料後 / 插入要素
             var conStr = @" SELECT * FROM dbo.Info";
             var dataset = sqlConn.DbQuery(conStr);
 
@@ -260,6 +245,51 @@ namespace FileTest.Controllers
             pDriver.Dispose();
         }
 
+        #endregion 讀取資料庫寫入Shp
+
+        #region 上傳及下載檔案(.ods/.shp/.kml)
+
+        /// <summary>
+        /// 獲取 Kml 資料寫入資料庫
+        /// </summary>
+        [Route("post/uploadKml")]
+        [HttpPost]
+        public void UploadKml()
+        {
+            var request = HttpContext.Current.Request;
+            var file = request.Files[0];
+            string path = $@"L:\Temp\{file.FileName}";
+            var document = XDocument.Load(path);
+            var ns = document.Root.Name.Namespace;
+            //get every placemark element in the document
+            var placemarks = document.Descendants(ns + "Placemark");
+
+            //loop through each placemark and separate it into coordinates and bearings
+            string conStr = "INSERT INTO info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
+            var data = new List<Info>();
+            foreach (var point in placemarks)
+            {
+                string coordinate = point.Descendants(ns + "coordinates").First().Value;
+                string[] coordinateArray = coordinate.Split(",");
+                data.Add(new Info()
+                {
+                    Address = point.Descendants(ns + "name").First().Value,
+                    Lat = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326).STX.Value,
+                    Longitude = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326).STY.Value,
+                    Location = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326)
+                });
+            }
+            sqlConn.DbExecute(conStr, data);
+        }
+
+        /// <summary>
+        /// 讀取資料庫寫入 Kml
+        /// </summary>
+        [Route("get/downloadKml")]
+        [HttpGet]
+        public HttpResponseMessage DownloadKml()
+        {
+        }
 
         /// <summary>
         /// 獲取 Shp 資料寫入資料庫
@@ -271,7 +301,7 @@ namespace FileTest.Controllers
             var request = HttpContext.Current.Request;
             var file = request.Files[0];
             string path = $@"L:\Temp\{file.FileName}";
-           // string filePath = @"D:\shp\shop.shp";
+            // string filePath = @"D:\shp\shop.shp";
             m_Shp.InitinalGdal();
             // 数据源
             Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
@@ -308,18 +338,21 @@ namespace FileTest.Controllers
                                 dicData.Add(fieldName, pFeature.GetFieldAsInteger(i));
                             }
                             break;
+
                         case FieldType.OFTInteger64:
                             {
                                 Console.WriteLine(pFeature.GetFieldAsInteger64(i));
                                 dicData.Add(fieldName, pFeature.GetFieldAsInteger64(i));
                             }
                             break;
+
                         case FieldType.OFTReal:
                             {
                                 Console.WriteLine(pFeature.GetFieldAsDouble(i));
                                 dicData.Add(fieldName, pFeature.GetFieldAsDouble(i));
                             }
                             break;
+
                         case FieldType.OFTString:
                             {
                                 //string fieldName = pFieldDefn.GetName();
@@ -337,14 +370,12 @@ namespace FileTest.Controllers
                 pFeature = pLayer.GetNextFeature();
             }
 
-
             pDriver.Register();
             pDataSource.FlushCache();
             pDataSource.Dispose();
             //pDriver.DeleteDataSource(filePath);
             pDriver.Dispose();
-
-            string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Location) VALUES(@Name, @Food, @Address, @Phone, @Location)";
+            string conStr = "INSERT INTO info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
             var data = new List<Info>();
             int listDicLength = listDic.Count;
             for (int i = 0; i < listDicLength; i++)
@@ -355,10 +386,102 @@ namespace FileTest.Controllers
                     Food = listDic[i]["Food"].ToString(),
                     Address = listDic[i]["Address"].ToString(),
                     Phone = listDic[i]["Phone"].ToString(),
+                    Lat = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326).STX.Value,
+                    Longitude = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326).STY.Value,
                     Location = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326)
                 });
             }
             sqlConn.DbExecute(conStr, data);
+            pLayer.Dispose();
+            pDriver.Dispose();
+        }
+
+        /// <summary>
+        /// 讀取資料庫寫入 Shp
+        /// </summary>
+        [Route("get/downloadShp")]
+        [HttpGet]
+        public HttpResponseMessage DownloadShp()
+        {
+            // 初始化
+            string direPath = $@"L:\shapefile";
+            string fileName = $@"L:\shapefile\shapefile.shp";
+            GdalConfiguration.ConfigureGdal();
+            GdalConfiguration.ConfigureOgr();
+            Gdal.SetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
+            Gdal.SetConfigOption("SHAPE_ENCODING", "");
+            Gdal.AllRegister();
+            Ogr.RegisterAll();
+            pDriver = Ogr.GetDriverByName("ESRI Shapefile");
+            SpatialReference sr = new SpatialReference("");
+
+            // 創建圖層
+            Layer pLayer = CreateLayer(direPath, wkbGeometryType.wkbPoint, sr);
+
+            // 創建欄位
+            FieldDefn pFieldDefn = new FieldDefn("Id", FieldType.OFTInteger);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
+
+            pFieldDefn = new FieldDefn("Name", FieldType.OFTString);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
+
+            pFieldDefn = new FieldDefn("Food", FieldType.OFTString);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
+
+            pFieldDefn = new FieldDefn("Address", FieldType.OFTString);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
+
+            pFieldDefn = new FieldDefn("Phone", FieldType.OFTString);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
+
+            pFieldDefn = new FieldDefn("Lat", FieldType.OFTReal);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
+
+            pFieldDefn = new FieldDefn("Longitude", FieldType.OFTReal);
+            pFieldDefn.SetWidth(200);
+            pLayer.CreateField(pFieldDefn, 1);
+
+            // 獲得欄位索引值來新增資料
+            FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
+            int fieldId = pFeatureDefn.GetFieldIndex("Id");
+            int fieldName = pFeatureDefn.GetFieldIndex("Name");
+            int fieldFood = pFeatureDefn.GetFieldIndex("Food");
+            int fieldAddress = pFeatureDefn.GetFieldIndex("Address"); ;
+            int fieldPhone = pFeatureDefn.GetFieldIndex("Phone");
+            int fieldLat = pFeatureDefn.GetFieldIndex("Lat");
+            int fieldLongitude = pFeatureDefn.GetFieldIndex("Longitude");
+
+            // 獲取資料庫資料後 / 插入要素
+            var conStr = @" SELECT * FROM dbo.Info";
+            var dataset = sqlConn.DbQuery(conStr);
+
+            Feature pFeature = new Feature(pFeatureDefn);
+            foreach (var data in dataset)
+            {
+                Geometry geometry = Geometry.CreateFromWkt($"POINT({data.Lat} {data.Longitude})");
+                pFeature.SetGeometry(geometry);
+                pFeature.SetField(fieldId, data.Id);
+                pFeature.SetField(fieldName, data.Name);
+                pFeature.SetField(fieldFood, data.Food);
+                pFeature.SetField(fieldAddress, data.Address);
+                pFeature.SetField(fieldPhone, data.Phone);
+                pFeature.SetField(fieldLat, data.Lat);
+                pFeature.SetField(fieldLongitude, data.Longitude);
+                pLayer.CreateFeature(pFeature);
+                pLayer.SetFeature(pFeature);
+            }
+            pDriver.Register();
+            dataSource.FlushCache();
+            dataSource.Dispose();
+            pLayer.Dispose();
+            pDriver.Dispose();
+            return FileResult(fileName, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
         /// <summary>
@@ -366,8 +489,7 @@ namespace FileTest.Controllers
         /// </summary>
         [Route("post/uploadOds")]
         [HttpPost]
-
-        public void uploadOds()
+        public void UploadOds()
         {
             var request = HttpContext.Current.Request;
             string path;
@@ -384,7 +506,7 @@ namespace FileTest.Controllers
                     int rowsLength = workSheet.RowCount;
                     string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
                     var data = new List<Info>();
-                    for (int i = 0; i < rowsLength-1; i++)
+                    for (int i = 0; i < rowsLength - 1; i++)
                     {
                         double Lat = workSheet[row, 5].Formula.ToDouble();
                         double Longitude = workSheet[row, 6].Formula.ToDouble();
@@ -413,8 +535,8 @@ namespace FileTest.Controllers
         [HttpGet]
         public HttpResponseMessage DownloadOds()
         {
-           Calc.LogPath = @"D:\log";
-           var outputPath = @"L:\New.ods";
+            Calc.LogPath = @"D:\log";
+            var outputPath = @"L:\New.ods";
             using (var calc = new Calc())
             {
                 try
@@ -428,8 +550,8 @@ namespace FileTest.Controllers
                     var line = new Line() { Color = Color.Black, OuterWidth = 20 };
                     var conStr =
                     @"
-                    SELECT * 
-                    FROM dbo.Info 
+                    SELECT *
+                    FROM dbo.Info
                     ";
 
                     int header = 0;
@@ -460,6 +582,9 @@ namespace FileTest.Controllers
             return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
+        #endregion 上傳及下載檔案(.ods/.shp/.kml)
+
+        #region 修改檔案
 
         /// <summary>
         /// 修改本地 Ods 檔案
@@ -489,46 +614,11 @@ namespace FileTest.Controllers
                 catch (Exception e)
                 {
                     _logger.Error("[Error in ClientController.Edit - id: " + " - Error: " + e.Message + "]");
-                    /// add redirect link here 
+                    /// add redirect link here
                 }
             }
         }
 
-        /// <summary>
-        /// 取得資料庫資料
-        /// </summary>
-        /// <returns></returns>
-        [Route("get/database")]
-        public IEnumerable<dynamic> GetDataBase()
-        {
-            var conStr =
-            @"
-            SELECT * 
-            FROM dbo.Info 
-            ";
-            var data = sqlConn.DbQuery(conStr);
-            return data;
-        }
-
-        // GET api/values/5
-        public string Get(int id)
-        {
-            return "value";
-        }
-
-        // POST api/values
-        public void Post([FromBody] string value)
-        {
-        }
-
-        // PUT api/values/5
-        public void Put(int id, [FromBody] string value)
-        {
-        }
-
-        // DELETE api/values/5
-        public void Delete(int id)
-        {
-        }
+        #endregion 修改檔案
     }
 }
