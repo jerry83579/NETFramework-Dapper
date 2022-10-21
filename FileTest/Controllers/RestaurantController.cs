@@ -263,7 +263,6 @@ namespace FileTest.Controllers
             var ns = document.Root.Name.Namespace;
             //get every placemark element in the document
             var placemarks = document.Descendants(ns + "Placemark");
-
             //loop through each placemark and separate it into coordinates and bearings
             string conStr = "INSERT INTO info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
             var data = new List<Info>();
@@ -271,9 +270,13 @@ namespace FileTest.Controllers
             {
                 string coordinate = point.Descendants(ns + "coordinates").First().Value;
                 string[] coordinateArray = coordinate.Split(",");
+                List<XElement> pointData = point.Descendants(ns + "SimpleData").ToList();
                 data.Add(new Info()
                 {
-                    Address = point.Descendants(ns + "name").First().Value,
+                    Name = point.Descendants(ns + "name").First().Value,
+                    Food = (string)pointData[1],
+                    Address = (string)pointData[2],
+                    Phone = (string)pointData[3],
                     Lat = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326).STX.Value,
                     Longitude = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326).STY.Value,
                     Location = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326)
@@ -282,14 +285,14 @@ namespace FileTest.Controllers
             sqlConn.DbExecute(conStr, data);
         }
 
-        /// <summary>
-        /// 讀取資料庫寫入 Kml
-        /// </summary>
-        [Route("get/downloadKml")]
-        [HttpGet]
-        public HttpResponseMessage DownloadKml()
-        {
-        }
+        ///// <summary>
+        ///// 讀取資料庫寫入 Kml
+        ///// </summary>
+        //[Route("get/downloadKml")]
+        //[HttpGet]
+        //public HttpResponseMessage DownloadKml()
+        //{
+        //}
 
         /// <summary>
         /// 獲取 Shp 資料寫入資料庫
