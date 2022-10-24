@@ -248,7 +248,7 @@ namespace FileTest.Controllers
 
         #endregion 讀取資料庫寫入Shp
 
-        #region 上傳及下載檔案(.ods/.shp/.kml)
+        #region 上傳及下載檔案(.kml/.shp/.ods)
 
         /// <summary>
         /// 讀取資料庫寫入 Kml
@@ -368,15 +368,6 @@ namespace FileTest.Controllers
             sqlConn.DbExecute(conStr, data);
         }
 
-        ///// <summary>
-        ///// 讀取資料庫寫入 Kml
-        ///// </summary>
-        //[Route("get/downloadKml")]
-        //[HttpGet]
-        //public HttpResponseMessage DownloadKml()
-        //{
-        //}
-
         /// <summary>
         /// 獲取 Shp 資料寫入資料庫
         /// </summary>
@@ -491,6 +482,10 @@ namespace FileTest.Controllers
             // 初始化
             string direPath = $@"L:\shapefile";
             string fileName = $@"L:\shapefile\shapefile.shp";
+            if (Directory.Exists(direPath))
+            {
+                Directory.Delete(direPath, true);
+            }
             GdalConfiguration.ConfigureGdal();
             GdalConfiguration.ConfigureOgr();
             Gdal.SetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
@@ -619,8 +614,11 @@ namespace FileTest.Controllers
         [HttpGet]
         public HttpResponseMessage DownloadOds()
         {
-            Calc.LogPath = @"D:\log";
-            var outputPath = @"L:\New.ods";
+            var path = @"L:\New.ods";
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, true);
+            }
             using (var calc = new Calc())
             {
                 try
@@ -656,17 +654,17 @@ namespace FileTest.Controllers
                         row++;
                         column = 0;
                     }
-                    calc.SaveAs(outputPath);
+                    calc.SaveAs(path);
                     calc.Close();
                 }
                 catch (Exception e)
                 {
                 }
             }
-            return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
+            return FileResult(path, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
-        #endregion 上傳及下載檔案(.ods/.shp/.kml)
+        #endregion 上傳及下載檔案(.kml/.shp/.ods)
 
         #region 修改檔案
 
