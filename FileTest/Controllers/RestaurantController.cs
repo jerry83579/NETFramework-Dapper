@@ -44,6 +44,7 @@ using System.Xml;
 using System.Xml.Linq;
 using System.Linq;
 using OfficeDevPnP.Core.Utilities;
+using Microsoft.Win32;
 
 namespace FileTest.Controllers
 {
@@ -250,6 +251,87 @@ namespace FileTest.Controllers
         #region 上傳及下載檔案(.ods/.shp/.kml)
 
         /// <summary>
+        /// 讀取資料庫寫入 Kml
+        /// </summary>
+        [Route("get/downloadKml")]
+        [HttpGet]
+        public HttpResponseMessage DownloadKml()
+        {
+            string outputPath = $@"L:\New.kml";
+            XmlTextWriter kml = new XmlTextWriter(outputPath, Encoding.UTF8);
+            kml.WriteStartDocument();
+            kml.WriteStartElement("kml", "http://www.opengis.net/kml/2.2"); //kml
+            kml.WriteStartElement("Document"); //Document
+            kml.WriteAttributeString("id", "root_doc");
+            kml.WriteStartElement("Schema");
+            kml.WriteAttributeString("name", "shapefile");
+            kml.WriteAttributeString("id", "shapefile");
+            kml.WriteStartElement("SimpleField");
+            kml.WriteAttributeString("name", "Id");
+            kml.WriteAttributeString("type", "float");
+            kml.WriteEndElement(); // Id
+            kml.WriteStartElement("SimpleField");
+            kml.WriteAttributeString("name", "Food");
+            kml.WriteAttributeString("type", "string");
+            kml.WriteEndElement(); // Food
+            kml.WriteStartElement("SimpleField");
+            kml.WriteAttributeString("name", "Address");
+            kml.WriteAttributeString("type", "string");
+            kml.WriteEndElement(); // Address
+            kml.WriteStartElement("SimpleField");
+            kml.WriteAttributeString("name", "Phone");
+            kml.WriteAttributeString("type", "string");
+            kml.WriteEndElement(); // Phone
+            kml.WriteStartElement("SimpleField");
+            kml.WriteAttributeString("name", "Lat");
+            kml.WriteAttributeString("type", "float");
+            kml.WriteEndElement(); // Lat
+            kml.WriteStartElement("SimpleField");
+            kml.WriteAttributeString("name", "Longitude");
+            kml.WriteAttributeString("type", "float");
+            kml.WriteEndElement(); // Longitude
+            kml.WriteEndElement(); // Schema
+            kml.WriteStartElement("Folder"); // Folder
+            kml.WriteStartElement("name");
+            kml.WriteString("shapefile");
+            kml.WriteEndElement(); // name
+
+            // 寫入資料
+            string conStr = @"SELECT * FROM dbo.Info";
+            var dataset = sqlConn.DbQuery(conStr);
+            foreach (var data in dataset)
+            {
+                kml.WriteStartElement("Placemark"); // Placemark
+                kml.WriteStartElement("name"); // name
+                kml.WriteEndElement(); // name
+                kml.WriteStartElement("ExtendedData"); // ExtendedData
+                kml.WriteStartElement("SchemaData"); // SchemaData
+                kml.WriteAttributeString("schemaUrl", "#shapefile");
+                foreach (var item in data)
+                {
+                    kml.WriteStartElement("SimpleData"); // SimpleData
+                    kml.WriteAttributeString("name", item.Key);
+                    kml.WriteString(item.Value.ToString());
+                    kml.WriteEndElement();
+                }
+                kml.WriteEndElement(); // ExtendedData
+                kml.WriteEndElement(); // SchemaData
+                kml.WriteStartElement("Point");
+                kml.WriteStartElement("coordinates");
+                kml.WriteString($"{data.Lat},{data.Longitude}");
+                kml.WriteEndElement(); // coordinates
+                kml.WriteEndElement(); // Point
+                kml.WriteEndElement(); // Placemark
+            }
+            kml.WriteEndElement(); // Folder
+            kml.WriteEndElement(); // Documment
+            kml.WriteEndElement(); // kml
+            kml.WriteEndDocument();
+            kml.Close();
+            return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
+        }
+
+        /// <summary>
         /// 獲取 Kml 資料寫入資料庫
         /// </summary>
         [Route("post/uploadKml")]
@@ -263,6 +345,7 @@ namespace FileTest.Controllers
             var ns = document.Root.Name.Namespace;
             //get every placemark element in the document
             var placemarks = document.Descendants(ns + "Placemark");
+
             //loop through each placemark and separate it into coordinates and bearings
             string conStr = "INSERT INTO info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
             var data = new List<Info>();
@@ -304,7 +387,6 @@ namespace FileTest.Controllers
             var request = HttpContext.Current.Request;
             var file = request.Files[0];
             string path = $@"L:\Temp\{file.FileName}";
-            // string filePath = @"D:\shp\shop.shp";
             m_Shp.InitinalGdal();
             // 数据源
             Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
@@ -500,7 +582,6 @@ namespace FileTest.Controllers
             {
                 var file = request.Files[0];
                 path = $@"L:\Temp\{file.FileName}";
-                Calc.LogPath = @"D:\log";
                 var row = 1;
                 using (var calc = new Calc(path))
                 {
