@@ -345,7 +345,6 @@ namespace FileTest.Controllers
             var ns = document.Root.Name.Namespace;
             //get every placemark element in the document
             var placemarks = document.Descendants(ns + "Placemark");
-
             //loop through each placemark and separate it into coordinates and bearings
             string conStr = "INSERT INTO info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
             var data = new List<Info>();
@@ -368,6 +367,18 @@ namespace FileTest.Controllers
             sqlConn.DbExecute(conStr, data);
         }
 
+<<<<<<< HEAD
+=======
+        ///// <summary>
+        ///// 讀取資料庫寫入 Kml
+        ///// </summary>
+        //[Route("get/downloadKml")]
+        //[HttpGet]
+        //public HttpResponseMessage DownloadKml()
+        //{
+        //}
+
+>>>>>>> 327c7fe82d91496ca66b6d98d02b7d8f90675db2
         /// <summary>
         /// 獲取 Shp 資料寫入資料庫
         /// </summary>
