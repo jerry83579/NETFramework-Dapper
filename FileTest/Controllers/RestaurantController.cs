@@ -257,7 +257,7 @@ namespace FileTest.Controllers
         [HttpGet]
         public HttpResponseMessage DownloadKml()
         {
-            string outputPath = $@"L:\New.kml";
+            string outputPath = $@"D:\files\download\New.kml";
             XmlTextWriter kml = new XmlTextWriter(outputPath, Encoding.UTF8);
             kml.WriteStartDocument();
             kml.WriteStartElement("kml", "http://www.opengis.net/kml/2.2"); //kml
@@ -340,7 +340,7 @@ namespace FileTest.Controllers
         {
             var request = HttpContext.Current.Request;
             var file = request.Files[0];
-            string path = $@"L:\Temp\{file.FileName}";
+            string path = $@"D:\files\upload\{file.FileName}";
             var document = XDocument.Load(path);
             var ns = document.Root.Name.Namespace;
             //get every placemark element in the document
@@ -367,18 +367,6 @@ namespace FileTest.Controllers
             sqlConn.DbExecute(conStr, data);
         }
 
-<<<<<<< HEAD
-=======
-        ///// <summary>
-        ///// 讀取資料庫寫入 Kml
-        ///// </summary>
-        //[Route("get/downloadKml")]
-        //[HttpGet]
-        //public HttpResponseMessage DownloadKml()
-        //{
-        //}
-
->>>>>>> 327c7fe82d91496ca66b6d98d02b7d8f90675db2
         /// <summary>
         /// 獲取 Shp 資料寫入資料庫
         /// </summary>
@@ -388,7 +376,7 @@ namespace FileTest.Controllers
         {
             var request = HttpContext.Current.Request;
             var file = request.Files[0];
-            string path = $@"L:\Temp\{file.FileName}";
+            string path = $@"D:\files\upload\{file.FileName}";
             m_Shp.InitinalGdal();
             // 数据源
             Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
@@ -491,8 +479,8 @@ namespace FileTest.Controllers
         public HttpResponseMessage DownloadShp()
         {
             // 初始化
-            string direPath = $@"L:\shapefile";
-            string fileName = $@"L:\shapefile\shapefile.shp";
+            string direPath = $@"D:\files\download\shapefile";
+            string outputPath = $@"D:\files\download\shapefile\shapefile.shp";
             if (Directory.Exists(direPath))
             {
                 Directory.Delete(direPath, true);
@@ -572,7 +560,7 @@ namespace FileTest.Controllers
             dataSource.Dispose();
             pLayer.Dispose();
             pDriver.Dispose();
-            return FileResult(fileName, "application/vnd.oasis.opendocument.spreadsheet");
+            return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
         /// <summary>
@@ -587,7 +575,7 @@ namespace FileTest.Controllers
             if (request.Files.Count > 0)
             {
                 var file = request.Files[0];
-                path = $@"L:\Temp\{file.FileName}";
+                path = $@"D:\files\upload\{file.FileName}";
                 var row = 1;
                 using (var calc = new Calc(path))
                 {
@@ -625,11 +613,7 @@ namespace FileTest.Controllers
         [HttpGet]
         public HttpResponseMessage DownloadOds()
         {
-            var path = @"L:\New.ods";
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, true);
-            }
+            string outputPath = @"D:\files\download\New.ods";
             using (var calc = new Calc())
             {
                 try
@@ -665,14 +649,14 @@ namespace FileTest.Controllers
                         row++;
                         column = 0;
                     }
-                    calc.SaveAs(path);
+                    calc.SaveAs(outputPath);
                     calc.Close();
                 }
                 catch (Exception e)
                 {
                 }
             }
-            return FileResult(path, "application/vnd.oasis.opendocument.spreadsheet");
+            return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
         #endregion 上傳及下載檔案(.kml/.shp/.ods)
