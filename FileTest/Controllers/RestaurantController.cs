@@ -45,13 +45,13 @@ using System.Xml.Linq;
 using System.Linq;
 using OfficeDevPnP.Core.Utilities;
 using Microsoft.Win32;
+using HttpRequest = System.Web.HttpRequest;
 
 namespace FileTest.Controllers
 {
     [EnableCors(origins: "*", headers: "*", methods: "*", SupportsCredentials = true)]
     public class OdsController : ApiController
     {
-        public SqlConn sqlConn;
         public ShpRead m_Shp;
         public static Driver pDriver;
         public static DataSource dataSource;
@@ -62,7 +62,6 @@ namespace FileTest.Controllers
 
         public OdsController()
         {
-            sqlConn = new SqlConn();
             m_Shp = new ShpRead();
         }
 
@@ -222,7 +221,7 @@ namespace FileTest.Controllers
 
             // 獲取資料庫資料後 / 插入要素
             var conStr = @" SELECT * FROM dbo.Info";
-            var dataset = sqlConn.DbQuery(conStr);
+            var dataset = SqlConn.DbQuery(conStr);
 
             Feature pFeature = new Feature(pFeatureDefn);
             foreach (var data in dataset)
@@ -298,7 +297,7 @@ namespace FileTest.Controllers
 
             // 寫入資料
             string conStr = @"SELECT * FROM dbo.Info";
-            var dataset = sqlConn.DbQuery(conStr);
+            var dataset = SqlConn.DbQuery(conStr);
             foreach (var data in dataset)
             {
                 kml.WriteStartElement("Placemark"); // Placemark
@@ -328,6 +327,7 @@ namespace FileTest.Controllers
             kml.WriteEndElement(); // kml
             kml.WriteEndDocument();
             kml.Close();
+            kml.Dispose();
             return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
@@ -343,9 +343,7 @@ namespace FileTest.Controllers
             string path = $@"D:\files\upload\{file.FileName}";
             var document = XDocument.Load(path);
             var ns = document.Root.Name.Namespace;
-            //get every placemark element in the document
             var placemarks = document.Descendants(ns + "Placemark");
-            //loop through each placemark and separate it into coordinates and bearings
             string conStr = "INSERT INTO info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
             var data = new List<Info>();
             foreach (var point in placemarks)
@@ -364,7 +362,7 @@ namespace FileTest.Controllers
                     Location = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326)
                 });
             }
-            sqlConn.DbExecute(conStr, data);
+            SqlConn.DbExecute(conStr, data);
         }
 
         /// <summary>
@@ -374,8 +372,8 @@ namespace FileTest.Controllers
         [HttpPost]
         public void UploadShp()
         {
-            var request = HttpContext.Current.Request;
-            var file = request.Files[0];
+            HttpRequest request = HttpContext.Current.Request;
+            HttpPostedFile file = request.Files[0];
             string path = $@"D:\files\upload\{file.FileName}";
             m_Shp.InitinalGdal();
             // 数据源
@@ -448,7 +446,6 @@ namespace FileTest.Controllers
             pDriver.Register();
             pDataSource.FlushCache();
             pDataSource.Dispose();
-            //pDriver.DeleteDataSource(filePath);
             pDriver.Dispose();
             string conStr = "INSERT INTO info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
             var data = new List<Info>();
@@ -466,7 +463,7 @@ namespace FileTest.Controllers
                     Location = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326)
                 });
             }
-            sqlConn.DbExecute(conStr, data);
+            SqlConn.DbExecute(conStr, data);
             pLayer.Dispose();
             pDriver.Dispose();
         }
@@ -538,7 +535,7 @@ namespace FileTest.Controllers
 
             // 獲取資料庫資料後 / 插入要素
             var conStr = @" SELECT * FROM dbo.Info";
-            var dataset = sqlConn.DbQuery(conStr);
+            var dataset = SqlConn.DbQuery(conStr);
 
             Feature pFeature = new Feature(pFeatureDefn);
             foreach (var data in dataset)
@@ -570,37 +567,43 @@ namespace FileTest.Controllers
         [HttpPost]
         public void UploadOds()
         {
-            var request = HttpContext.Current.Request;
-            string path;
+            HttpRequest request = HttpContext.Current.Request;
             if (request.Files.Count > 0)
             {
-                var file = request.Files[0];
-                path = $@"D:\files\upload\{file.FileName}";
-                var row = 1;
-                using (var calc = new Calc(path))
+                int row = 1;
+                HttpPostedFile file = request.Files[0];
+                string path = $@"D:\files\upload\{file.FileName}";
+                using (Calc calc = new Calc(path))
                 {
-                    var workSheet = calc.Tables[1];
-                    int columnsLength = workSheet.ColumnCount - 2;
-                    int rowsLength = workSheet.RowCount;
-                    string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
-                    var data = new List<Info>();
-                    for (int i = 0; i < rowsLength - 1; i++)
+                    try
                     {
-                        double Lat = workSheet[row, 5].Formula.ToDouble();
-                        double Longitude = workSheet[row, 6].Formula.ToDouble();
-                        data.Add(new Info()
+                        Table workSheet = calc.Tables[1];
+                        int columnsLength = workSheet.ColumnCount - 2;
+                        int rowsLength = workSheet.RowCount;
+                        string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
+                        List<Info> infoData = new List<Info>();
+                        for (int i = 0; i < rowsLength - 1; i++)
                         {
-                            Name = workSheet[row, 1].Formula,
-                            Food = workSheet[row, 2].Formula,
-                            Address = workSheet[row, 3].Formula,
-                            Phone = workSheet[row, 4].Formula,
-                            Lat = Lat,
-                            Longitude = Longitude,
-                            Location = SqlGeometry.Point(Lat, Longitude, 4326)
-                        });
-                        row++;
+                            double Lat = workSheet[row, 5].Formula.ToDouble();
+                            double Longitude = workSheet[row, 6].Formula.ToDouble();
+                            infoData.Add(new Info()
+                            {
+                                Name = workSheet[row, 1].Formula,
+                                Food = workSheet[row, 2].Formula,
+                                Address = workSheet[row, 3].Formula,
+                                Phone = workSheet[row, 4].Formula,
+                                Lat = Lat,
+                                Longitude = Longitude,
+                                Location = SqlGeometry.Point(Lat, Longitude, 4326)
+                            });
+                            row++;
+                        }
+                        SqlConn.DbExecute(conStr, infoData);
                     }
-                    int result = sqlConn.DbExecute(conStr, data);
+                    catch
+                    {
+                        throw new Exception("can not upload .");
+                    }
                 }
             }
         }
@@ -618,23 +621,16 @@ namespace FileTest.Controllers
             {
                 try
                 {
-                    var tb = calc.Tables.AddNew("新的工作表");
-                    // 樣式
+                    Table tb = calc.Tables.AddNew("新的工作表");
                     Font headerFont = new Font("標楷體", 28, FontStyle.Bold),
                     colFont = new Font("標楷體", 14, FontStyle.Bold),
                     rowFont = new Font("標楷體", 12);
-
-                    var line = new Line() { Color = Color.Black, OuterWidth = 20 };
-                    var conStr =
-                    @"
-                    SELECT *
-                    FROM dbo.Info
-                    ";
-
+                    Line line = new Line() { Color = Color.Black, OuterWidth = 20 };
+                    string conStr = @"SELECT * FROM dbo.Info";
                     int header = 0;
                     int row = 0;
                     int column = 0;
-                    var dataset = sqlConn.DbQuery(conStr);
+                    List<dynamic> dataset = SqlConn.DbQuery(conStr);
                     foreach (var rowData in dataset)
                     {
                         foreach (var field in rowData)
@@ -650,10 +646,10 @@ namespace FileTest.Controllers
                         column = 0;
                     }
                     calc.SaveAs(outputPath);
-                    calc.Close();
                 }
-                catch (Exception e)
+                catch
                 {
+                    throw new Exception("can not download .");
                 }
             }
             return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");

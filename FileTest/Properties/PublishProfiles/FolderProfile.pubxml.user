@@ -1,10 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
-https://go.microsoft.com/fwlink/?LinkID=208121. 
+https://go.microsoft.com/fwlink/?LinkID=208121.
 -->
-<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project>
   <PropertyGroup>
-    <History>True|2022-10-24T09:48:30.9778055Z;False|2022-10-24T17:47:26.8870715+08:00;</History>
     <_PublishTargetUrl>D:\cSharp\FileTest\FileTest\bin\app.publish\</_PublishTargetUrl>
   </PropertyGroup>
   <ItemGroup>
@@ -558,10 +557,10 @@ https://go.microsoft.com/fwlink/?LinkID=208121.
       <publishTime>08/14/2018 07:22:38</publishTime>
     </File>
     <File Include="bin/FileTest.dll">
-      <publishTime>10/24/2022 17:48:26</publishTime>
+      <publishTime>10/25/2022 15:00:11</publishTime>
     </File>
     <File Include="bin/FileTest.pdb">
-      <publishTime>10/24/2022 17:48:26</publishTime>
+      <publishTime>10/25/2022 15:00:11</publishTime>
     </File>
     <File Include="bin/fr/Microsoft.Data.Edm.resources.dll">
       <publishTime>08/14/2018 07:22:12</publishTime>

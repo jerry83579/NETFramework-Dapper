@@ -11,20 +11,24 @@ namespace FileTest.Helpers
 {
     public class SqlConn
     {
-        public SqlConnection myConnection = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString);
-        public SqlConn() { }
+        public SqlConn()
+        { }
+
         /// <summary>
         /// 取得資料
         /// </summary>
         /// <param name="conStr">連線字串</param>
         /// <returns></returns>
-        public List<dynamic> DbQuery (string conStr){
+        public static List<dynamic> DbQuery(string conStr)
+        {
             try
             {
-                myConnection.Open();
-                var result = myConnection.Query(conStr).ToList();
-                myConnection.Close();
-                return result;
+                using (SqlConnection myConnection = new SqlConnection(ConfigurationManager.
+                    ConnectionStrings["DefaultConnection"].ConnectionString))
+                {
+                    myConnection.Open();
+                    return myConnection.Query(conStr).ToList();
+                }
             }
             catch (SqlException exp)
             {
@@ -32,14 +36,16 @@ namespace FileTest.Helpers
             }
         }
 
-        public int DbExecute(string conStr, List<Info> insertData)
+        public static int DbExecute(string conStr, List<Info> insertData)
         {
             try
             {
-                myConnection.Open();
-                int result = myConnection.Execute(conStr, insertData);
-                myConnection.Close();
-                return result;
+                using (SqlConnection myConnection = new SqlConnection(ConfigurationManager.
+                    ConnectionStrings["DefaultConnection"].ConnectionString))
+                {
+                    myConnection.Open();
+                    return myConnection.Execute(conStr, insertData);
+                }
             }
             catch (SqlException exp)
             {
