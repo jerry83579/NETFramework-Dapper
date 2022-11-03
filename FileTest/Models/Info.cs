@@ -12,11 +12,12 @@ namespace FileTest.Models
     {
         public int Id { get; set; }
         public string Name { get; set; }
-        public string Food { get; set; }
+        public int Price { get; set; }
         public string Address { get; set; }
         public string Phone { get; set; }
         public double? Lat { get; set; }
         public double? Longitude { get; set; }
         public SqlGeometry Location { get; set; }
+        public string Category { get; set; }
     }
 }

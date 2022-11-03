@@ -46,6 +46,7 @@ using System.Linq;
 using OfficeDevPnP.Core.Utilities;
 using Microsoft.Win32;
 using HttpRequest = System.Web.HttpRequest;
+using System.Web.Routing;
 
 namespace FileTest.Controllers
 {
@@ -144,14 +145,14 @@ namespace FileTest.Controllers
             geometry = Geometry.CreateFromWkt("POINT(203537 2536875)");
             pFeature.SetGeometry(geometry);
             pFeature.SetField(fieldIndex_A, "2");
-            pFeature.SetField(fieldIndex_B, "食物B");
+            pFeature.SetField(fieldIndex_B, "價格B");
             pFeature.SetField(fieldIndex_C, "北平路");
             pLayer.CreateFeature(pFeature);
 
             geometry = Geometry.CreateFromWkt("POINT(11 110)");
             pFeature.SetGeometry(geometry);
             pFeature.SetField(fieldIndex_A, "3");
-            pFeature.SetField(fieldIndex_B, "食物C");
+            pFeature.SetField(fieldIndex_B, "價格C");
             pFeature.SetField(fieldIndex_C, "河南路");
             pLayer.CreateFeature(pFeature);
         }
@@ -167,7 +168,7 @@ namespace FileTest.Controllers
         public void GetExportShp()
         {
             // 初始化
-            string direPath = @"D:\shapefile";
+            string direPath = @"C:\shapefile";
             GdalConfiguration.ConfigureGdal();
             GdalConfiguration.ConfigureOgr();
             Gdal.SetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
@@ -185,11 +186,11 @@ namespace FileTest.Controllers
             pFieldDefn.SetWidth(200);
             pLayer.CreateField(pFieldDefn, 1);
 
-            pFieldDefn = new FieldDefn("Name", FieldType.OFTString);
+            pFieldDefn = new FieldDefn("Category", FieldType.OFTString);
             pFieldDefn.SetWidth(200);
             pLayer.CreateField(pFieldDefn, 1);
 
-            pFieldDefn = new FieldDefn("Food", FieldType.OFTString);
+            pFieldDefn = new FieldDefn("Price", FieldType.OFTString);
             pFieldDefn.SetWidth(200);
             pLayer.CreateField(pFieldDefn, 1);
 
@@ -212,8 +213,8 @@ namespace FileTest.Controllers
             // 獲得欄位索引值來新增資料
             FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
             int fieldId = pFeatureDefn.GetFieldIndex("Id");
-            int fieldName = pFeatureDefn.GetFieldIndex("Name");
-            int fieldFood = pFeatureDefn.GetFieldIndex("Food");
+            int fieldCategory = pFeatureDefn.GetFieldIndex("Category");
+            int fieldPrice = pFeatureDefn.GetFieldIndex("Price");
             int fieldAddress = pFeatureDefn.GetFieldIndex("Address"); ;
             int fieldPhone = pFeatureDefn.GetFieldIndex("Phone");
             int fieldLat = pFeatureDefn.GetFieldIndex("Lat");
@@ -229,8 +230,8 @@ namespace FileTest.Controllers
                 Geometry geometry = Geometry.CreateFromWkt($"POINT({data.Lat} {data.Longitude})");
                 pFeature.SetGeometry(geometry);
                 pFeature.SetField(fieldId, data.Id);
-                pFeature.SetField(fieldName, data.Name);
-                pFeature.SetField(fieldFood, data.Food);
+                pFeature.SetField(fieldCategory, data.Category);
+                pFeature.SetField(fieldPrice, data.Price);
                 pFeature.SetField(fieldAddress, data.Address);
                 pFeature.SetField(fieldPhone, data.Phone);
                 pFeature.SetField(fieldLat, data.Lat);
@@ -256,7 +257,7 @@ namespace FileTest.Controllers
         [HttpGet]
         public HttpResponseMessage DownloadKml()
         {
-            string outputPath = $@"D:\files\download\New.kml";
+            string outputPath = $@"C:\files\download\New.kml";
             XmlTextWriter kml = new XmlTextWriter(outputPath, Encoding.UTF8);
             kml.WriteStartDocument();
             kml.WriteStartElement("kml", "http://www.opengis.net/kml/2.2"); //kml
@@ -270,9 +271,9 @@ namespace FileTest.Controllers
             kml.WriteAttributeString("type", "float");
             kml.WriteEndElement(); // Id
             kml.WriteStartElement("SimpleField");
-            kml.WriteAttributeString("name", "Food");
+            kml.WriteAttributeString("name", "Price");
             kml.WriteAttributeString("type", "string");
-            kml.WriteEndElement(); // Food
+            kml.WriteEndElement(); // Price
             kml.WriteStartElement("SimpleField");
             kml.WriteAttributeString("name", "Address");
             kml.WriteAttributeString("type", "string");
@@ -340,11 +341,11 @@ namespace FileTest.Controllers
         {
             var request = HttpContext.Current.Request;
             var file = request.Files[0];
-            string path = $@"D:\files\upload\{file.FileName}";
+            string path = $@"C:\files\upload\{file.FileName}";
             var document = XDocument.Load(path);
             var ns = document.Root.Name.Namespace;
             var placemarks = document.Descendants(ns + "Placemark");
-            string conStr = "INSERT INTO info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
+            string conStr = "INSERT INTO info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
             var data = new List<Info>();
             foreach (var point in placemarks)
             {
@@ -353,8 +354,8 @@ namespace FileTest.Controllers
                 List<XElement> pointData = point.Descendants(ns + "SimpleData").ToList();
                 data.Add(new Info()
                 {
-                    Name = point.Descendants(ns + "name").First().Value,
-                    Food = (string)pointData[1],
+                    Category = point.Descendants(ns + "name").First().Value,
+                    Price = (int)pointData[1],
                     Address = (string)pointData[2],
                     Phone = (string)pointData[3],
                     Lat = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326).STX.Value,
@@ -374,7 +375,7 @@ namespace FileTest.Controllers
         {
             HttpRequest request = HttpContext.Current.Request;
             HttpPostedFile file = request.Files[0];
-            string path = $@"D:\files\upload\{file.FileName}";
+            string path = $@"C:\files\upload\{file.FileName}";
             m_Shp.InitinalGdal();
             // 数据源
             Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
@@ -447,15 +448,15 @@ namespace FileTest.Controllers
             pDataSource.FlushCache();
             pDataSource.Dispose();
             pDriver.Dispose();
-            string conStr = "INSERT INTO info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
+            string conStr = "INSERT INTO info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
             var data = new List<Info>();
             int listDicLength = listDic.Count;
             for (int i = 0; i < listDicLength; i++)
             {
                 data.Add(new Info()
                 {
-                    Name = listDic[i]["Name"].ToString(),
-                    Food = listDic[i]["Food"].ToString(),
+                    Category = listDic[i]["Category"].ToString(),
+                    Price = (int)listDic[i]["Price"],
                     Address = listDic[i]["Address"].ToString(),
                     Phone = listDic[i]["Phone"].ToString(),
                     Lat = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326).STX.Value,
@@ -476,8 +477,8 @@ namespace FileTest.Controllers
         public HttpResponseMessage DownloadShp()
         {
             // 初始化
-            string direPath = $@"D:\files\download\shapefile";
-            string outputPath = $@"D:\files\download\shapefile\shapefile.shp";
+            string direPath = $@"C:\files\download\shapefile";
+            string outputPath = $@"C:\files\download\shapefile\shapefile.shp";
             if (Directory.Exists(direPath))
             {
                 Directory.Delete(direPath, true);
@@ -499,11 +500,11 @@ namespace FileTest.Controllers
             pFieldDefn.SetWidth(200);
             pLayer.CreateField(pFieldDefn, 1);
 
-            pFieldDefn = new FieldDefn("Name", FieldType.OFTString);
+            pFieldDefn = new FieldDefn("Category", FieldType.OFTString);
             pFieldDefn.SetWidth(200);
             pLayer.CreateField(pFieldDefn, 1);
 
-            pFieldDefn = new FieldDefn("Food", FieldType.OFTString);
+            pFieldDefn = new FieldDefn("Price", FieldType.OFTString);
             pFieldDefn.SetWidth(200);
             pLayer.CreateField(pFieldDefn, 1);
 
@@ -526,8 +527,8 @@ namespace FileTest.Controllers
             // 獲得欄位索引值來新增資料
             FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
             int fieldId = pFeatureDefn.GetFieldIndex("Id");
-            int fieldName = pFeatureDefn.GetFieldIndex("Name");
-            int fieldFood = pFeatureDefn.GetFieldIndex("Food");
+            int fieldCategory = pFeatureDefn.GetFieldIndex("Category");
+            int fieldPrice = pFeatureDefn.GetFieldIndex("Price");
             int fieldAddress = pFeatureDefn.GetFieldIndex("Address"); ;
             int fieldPhone = pFeatureDefn.GetFieldIndex("Phone");
             int fieldLat = pFeatureDefn.GetFieldIndex("Lat");
@@ -543,8 +544,8 @@ namespace FileTest.Controllers
                 Geometry geometry = Geometry.CreateFromWkt($"POINT({data.Lat} {data.Longitude})");
                 pFeature.SetGeometry(geometry);
                 pFeature.SetField(fieldId, data.Id);
-                pFeature.SetField(fieldName, data.Name);
-                pFeature.SetField(fieldFood, data.Food);
+                pFeature.SetField(fieldCategory, data.Category);
+                pFeature.SetField(fieldPrice, data.Price);
                 pFeature.SetField(fieldAddress, data.Address);
                 pFeature.SetField(fieldPhone, data.Phone);
                 pFeature.SetField(fieldLat, data.Lat);
@@ -572,15 +573,15 @@ namespace FileTest.Controllers
             {
                 int row = 1;
                 HttpPostedFile file = request.Files[0];
-                string path = $@"D:\files\upload\{file.FileName}";
+                string path = $@"C:\files\upload\{file.FileName}";
                 using (Calc calc = new Calc(path))
                 {
                     try
                     {
-                        Table workSheet = calc.Tables[1];
+                        Table workSheet = calc.Tables[0];
                         int columnsLength = workSheet.ColumnCount - 2;
                         int rowsLength = workSheet.RowCount;
-                        string conStr = @"INSERT INTO Info (Name, Food, Address, Phone, Lat, Longitude, Location) VALUES(@Name, @Food, @Address, @Phone, @Lat, @Longitude, @Location)";
+                        string conStr = @"INSERT INTO Info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
                         List<Info> infoData = new List<Info>();
                         for (int i = 0; i < rowsLength - 1; i++)
                         {
@@ -588,8 +589,8 @@ namespace FileTest.Controllers
                             double Longitude = workSheet[row, 6].Formula.ToDouble();
                             infoData.Add(new Info()
                             {
-                                Name = workSheet[row, 1].Formula,
-                                Food = workSheet[row, 2].Formula,
+                                Category = workSheet[row, 1].Formula,
+                                Price = workSheet[row, 2].Formula.ToInt32(),
                                 Address = workSheet[row, 3].Formula,
                                 Phone = workSheet[row, 4].Formula,
                                 Lat = Lat,
@@ -616,12 +617,12 @@ namespace FileTest.Controllers
         [HttpGet]
         public HttpResponseMessage DownloadOds()
         {
-            string outputPath = @"D:\files\download\New.ods";
+            string outputPath = @"C:\files\download\New.ods";
             using (var calc = new Calc())
             {
                 try
                 {
-                    Table tb = calc.Tables.AddNew("新的工作表");
+                    Table workSheet = calc.Tables[0];
                     Font headerFont = new Font("標楷體", 28, FontStyle.Bold),
                     colFont = new Font("標楷體", 14, FontStyle.Bold),
                     rowFont = new Font("標楷體", 12);
@@ -637,9 +638,9 @@ namespace FileTest.Controllers
                         {
                             if (row <= header)
                             {
-                                tb[row, column].Formula = field.Key;
+                                workSheet[row, column].Formula = field.Key;
                             }
-                            tb[row + 1, column].Formula = Convert.ToString(field.Value);
+                            workSheet[row + 1, column].Formula = Convert.ToString(field.Value);
                             column++;
                         }
                         row++;
@@ -666,9 +667,9 @@ namespace FileTest.Controllers
         public void Get()
         {
             Logger _logger = LogManager.GetCurrentClassLogger();
-            Calc.LogPath = @"D:\log";
-            var path = @"D:\test.ods";
-            var outputPath = @"D:\output.ods";
+            Calc.LogPath = @"C:\log";
+            var path = @"C:\test.ods";
+            var outputPath = @"C:\output.ods";
             using (var calc = new Calc(path))
             {
                 try
@@ -693,5 +694,31 @@ namespace FileTest.Controllers
         }
 
         #endregion 修改檔案
+
+        #region 我的練習
+
+        [Route("get/myTest")]
+        [HttpGet]
+        public void Test()
+        {
+            List<string> test = new List<string>() { "aa", "bb", "cc", "aAA", "cCC", "d" };
+            List<string> copyTest = new List<string>(test);
+            Dictionary<string, string> newTest = new Dictionary<string, string>();
+            int copyTestLength = copyTest.Count;
+            var sum = new StringBuilder();
+            while (copyTest.Count != 0)
+            {
+                List<string> equalList = copyTest.Where(p => p.Contains(copyTest[0][0])).ToList();
+                foreach (var item in equalList)
+                {
+                    sum.Append(item);
+                    copyTest.Remove(item);
+                }
+                newTest.Add(sum[0].ToString(), sum.ToString());
+                sum.Clear();
+            }
+        }
+
+        #endregion 我的練習
     }
 }
