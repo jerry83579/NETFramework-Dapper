@@ -18,7 +18,7 @@ namespace ShpUploadAPI
     public class GdalHelper
     {
         [DllImport("gdal204.dll", EntryPoint = "OGR_F_GetFieldAsString", CallingConvention = CallingConvention.Cdecl)]
-        public extern static System.IntPtr OGR_F_GetFieldAsString(HandleRef handle, int index);
+        public static extern System.IntPtr OGR_F_GetFieldAsString(HandleRef handle, int index);
 
         /// <summary>
         /// 获取要素图层
@@ -82,79 +82,81 @@ namespace ShpUploadAPI
         /// 读取要素图层属性表
         /// </summary>
         /// <param name="filePath"></param>
-        //public static List<Dictionary<string, object>> ReadLayerAttributes(string filePath)
-        //{
-        //    // 注册GDAL
-        //    OSGeo.GDAL.Gdal.SetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
-        //    OSGeo.GDAL.Gdal.SetConfigOption("SHAPE_ENCODING", "");
-        //    OSGeo.GDAL.Gdal.AllRegister();
-        //    OSGeo.OGR.Ogr.RegisterAll();
+        public static List<Dictionary<string, object>> ReadLayerAttributes(string filePath)
+        {
+            // 注册GDAL
+            OSGeo.GDAL.Gdal.SetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
+            OSGeo.GDAL.Gdal.SetConfigOption("SHAPE_ENCODING", "");
+            OSGeo.GDAL.Gdal.AllRegister();
+            OSGeo.OGR.Ogr.RegisterAll();
 
-        //    // 数据源
-        //    OSGeo.OGR.Driver pDriver = OSGeo.OGR.Ogr.GetDriverByName("ESRI Shapefile");
-        //    OSGeo.OGR.DataSource pDataSource = pDriver.Open(filePath, 0);
-        //    OSGeo.OGR.Layer pLayer = pDataSource.GetLayerByName(System.IO.Path.GetFileNameWithoutExtension(filePath));
-        //    pLayer.GetSpatialRef();
-        //    // 字段结构
-        //    OSGeo.OGR.Feature pFeature = pLayer.GetNextFeature();
-        //    OSGeo.OGR.FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
-        //    int fieldsCount = pFeature.GetFieldCount();
+            // 数据源
+            OSGeo.OGR.Driver pDriver = OSGeo.OGR.Ogr.GetDriverByName("ESRI Shapefile");
+            OSGeo.OGR.DataSource pDataSource = pDriver.Open(filePath, 0);
+            OSGeo.OGR.Layer pLayer = pDataSource.GetLayerByName(System.IO.Path.GetFileNameWithoutExtension(filePath));
+            pLayer.GetSpatialRef();
+            // 字段结构
+            OSGeo.OGR.Feature pFeature = pLayer.GetNextFeature();
+            OSGeo.OGR.FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
+            int fieldsCount = pFeature.GetFieldCount();
 
-        //    List<Dictionary<string, object>> listDic = new List<Dictionary<string, object>>();
-        //    // 遍历要素
-        //    while (pFeature != null)
-        //    {
-        //        Dictionary<string, object> dicData = new Dictionary<string, object>();
-        //        pFeature.GetGeometryRef().ExportToWkt(out string spatialReferenceString);
-        //        dicData.Add("Geo", spatialReferenceString);
-        //        for (int i = 0; i < fieldsCount; i++)
-        //        {
-        //            OSGeo.OGR.FieldDefn pFieldDefn = pFeature.GetFieldDefnRef(i);
-        //            string fieldName = pFieldDefn.GetName();
-        //            switch (pFieldDefn.GetFieldType())
-        //            {
-        //                case FieldType.OFTInteger:
-        //                    {
-        //                        Console.WriteLine(pFeature.GetFieldAsInteger(i));
-        //                        dicData.Add(fieldName, pFeature.GetFieldAsInteger(i));
-        //                    }
-        //                    break;
-        //                case FieldType.OFTInteger64:
-        //                    {
-        //                        Console.WriteLine(pFeature.GetFieldAsInteger64(i));
-        //                        dicData.Add(fieldName, pFeature.GetFieldAsInteger64(i));
-        //                    }
-        //                    break;
-        //                case FieldType.OFTReal:
-        //                    {
-        //                        Console.WriteLine(pFeature.GetFieldAsDouble(i));
-        //                        dicData.Add(fieldName, pFeature.GetFieldAsDouble(i));
-        //                    }
-        //                    break;
-        //                case FieldType.OFTString:
-        //                    {
-        //                        //string fieldName = pFieldDefn.GetName();
-        //                        int fieldIndex = pFeatureDefn.GetFieldIndex(fieldName);
-        //                        IntPtr pIntPtr = OGR_F_GetFieldAsString(OSGeo.OGR.Feature.getCPtr(pFeature), fieldIndex);
-        //                        Console.WriteLine(Marshal.PtrToStringAnsi(pIntPtr));
-        //                        dicData.Add(fieldName, Marshal.PtrToStringAnsi(pIntPtr));
-        //                    }
-        //                    break;
-        //            }
-        //        }
-        //        Console.WriteLine("----------------------------------------------");
-        //        listDic.Add(dicData);
-        //        pFeature = pLayer.GetNextFeature();
-        //    }
+            List<Dictionary<string, object>> listDic = new List<Dictionary<string, object>>();
+            // 遍历要素
+            while (pFeature != null)
+            {
+                Dictionary<string, object> dicData = new Dictionary<string, object>();
+                pFeature.GetGeometryRef().ExportToWkt(out string spatialReferenceString);
+                dicData.Add("Geo", spatialReferenceString);
+                for (int i = 0; i < fieldsCount; i++)
+                {
+                    OSGeo.OGR.FieldDefn pFieldDefn = pFeature.GetFieldDefnRef(i);
+                    string fieldName = pFieldDefn.GetName();
+                    switch (pFieldDefn.GetFieldType())
+                    {
+                        case FieldType.OFTInteger:
+                            {
+                                Console.WriteLine(pFeature.GetFieldAsInteger(i));
+                                dicData.Add(fieldName, pFeature.GetFieldAsInteger(i));
+                            }
+                            break;
 
+                        case FieldType.OFTInteger64:
+                            {
+                                Console.WriteLine(pFeature.GetFieldAsInteger64(i));
+                                dicData.Add(fieldName, pFeature.GetFieldAsInteger64(i));
+                            }
+                            break;
 
-        //    pDriver.Register();
-        //    pDataSource.FlushCache();
-        //    pDataSource.Dispose();
-        //    pDriver.DeleteDataSource(filePath);
-        //    pDriver.Dispose();
-        //    return listDic;
-        //}
+                        case FieldType.OFTReal:
+                            {
+                                Console.WriteLine(pFeature.GetFieldAsDouble(i));
+                                dicData.Add(fieldName, pFeature.GetFieldAsDouble(i));
+                            }
+                            break;
+
+                        case FieldType.OFTString:
+                            {
+                                //string fieldName = pFieldDefn.GetName();
+                                int fieldIndex = pFeatureDefn.GetFieldIndex(fieldName);
+                                IntPtr pIntPtr = OGR_F_GetFieldAsString(OSGeo.OGR.Feature.getCPtr(pFeature), fieldIndex);
+                                Console.WriteLine(Marshal.PtrToStringAnsi(pIntPtr));
+                                dicData.Add(fieldName, Marshal.PtrToStringAnsi(pIntPtr));
+                            }
+                            break;
+                    }
+                }
+                Console.WriteLine("----------------------------------------------");
+                listDic.Add(dicData);
+                pFeature = pLayer.GetNextFeature();
+            }
+
+            pDriver.Register();
+            pDataSource.FlushCache();
+            pDataSource.Dispose();
+            pDriver.DeleteDataSource(filePath);
+            pDriver.Dispose();
+            return listDic;
+        }
 
         /// <summary>
         /// 插入要素
@@ -294,7 +296,6 @@ namespace ShpUploadAPI
             //if (File.Exists(outputShapefile))
             //    pDriver.DeleteDataSource(outputShapefile);
 
-
             //OSGeo.OGR.Layer outLayer = CreateLayer(outputShapefile, inLayer.GetGeomType(), inLayer.GetSpatialRef());
 
             //CreateFields(outLayer);
@@ -305,13 +306,11 @@ namespace ShpUploadAPI
             //OSGeo.OGR.Layer outLayer = outDataSource.GetLayerByIndex(0);
             //Layer outLayer = outDataSource.GetLayerByName(Path.GetFileNameWithoutExtension(outputShapefile));
 
-
             //OSGeo.OSR.SpatialReference inSpatialReference = inLayer.GetSpatialRef();
             //inSpatialReference.ExportToWkt(out string inspatialReferenceString);
 
             //OSGeo.OSR.SpatialReference outSpatialReference = outLayer.GetSpatialRef();
             //outSpatialReference.ExportToWkt(out string outspatialReferenceString);
-
 
             //// add fields
             //OSGeo.OGR.FeatureDefn inLayerDefn = inLayer.GetLayerDefn();

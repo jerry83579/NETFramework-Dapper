@@ -17,6 +17,7 @@ using OSGeo.GDAL;
 using FieldType = OSGeo.OGR.FieldType;
 using Feature = OSGeo.OGR.Feature;
 using Driver = OSGeo.OGR.Driver;
+using DataSource = OSGeo.OGR.DataSource;
 using System.Runtime.InteropServices;
 using Microsoft.SqlServer.Types;
 using System.Data.SqlTypes;
@@ -47,6 +48,9 @@ using OfficeDevPnP.Core.Utilities;
 using Microsoft.Win32;
 using HttpRequest = System.Web.HttpRequest;
 using System.Web.Routing;
+using unoidl.com.sun.star.awt;
+using System.Web.WebPages;
+using System.IO.Compression;
 
 namespace FileTest.Controllers
 {
@@ -253,9 +257,9 @@ namespace FileTest.Controllers
         /// <summary>
         /// 讀取資料庫寫入 Kml
         /// </summary>
-        [Route("get/downloadKml")]
+        [Route("get/downloadKml/{ids}")]
         [HttpGet]
-        public HttpResponseMessage DownloadKml()
+        public HttpResponseMessage DownloadKml(string ids)
         {
             string outputPath = $@"C:\files\download\New.kml";
             XmlTextWriter kml = new XmlTextWriter(outputPath, Encoding.UTF8);
@@ -270,6 +274,10 @@ namespace FileTest.Controllers
             kml.WriteAttributeString("name", "Id");
             kml.WriteAttributeString("type", "float");
             kml.WriteEndElement(); // Id
+            kml.WriteStartElement("SimpleField");
+            kml.WriteAttributeString("name", "Category");
+            kml.WriteAttributeString("type", "string");
+            kml.WriteEndElement(); // Category
             kml.WriteStartElement("SimpleField");
             kml.WriteAttributeString("name", "Price");
             kml.WriteAttributeString("type", "string");
@@ -297,13 +305,11 @@ namespace FileTest.Controllers
             kml.WriteEndElement(); // name
 
             // 寫入資料
-            string conStr = @"SELECT * FROM dbo.Info";
+            string conStr = $@"SELECT * FROM dbo.Info WHERE id in ({ids})";
             var dataset = SqlConn.DbQuery(conStr);
             foreach (var data in dataset)
             {
                 kml.WriteStartElement("Placemark"); // Placemark
-                kml.WriteStartElement("name"); // name
-                kml.WriteEndElement(); // name
                 kml.WriteStartElement("ExtendedData"); // ExtendedData
                 kml.WriteStartElement("SchemaData"); // SchemaData
                 kml.WriteAttributeString("schemaUrl", "#shapefile");
@@ -472,16 +478,26 @@ namespace FileTest.Controllers
         /// <summary>
         /// 讀取資料庫寫入 Shp
         /// </summary>
-        [Route("get/downloadShp")]
+        [Route("get/downloadShp/{ids}")]
         [HttpGet]
-        public HttpResponseMessage DownloadShp()
+        public HttpResponseMessage DownloadShp(string ids)
         {
             // 初始化
             string direPath = $@"C:\files\download\shapefile";
+            string zipPath = $@"C:\files\download\shapefile.zip";
             string outputPath = $@"C:\files\download\shapefile\shapefile.shp";
             if (Directory.Exists(direPath))
             {
                 Directory.Delete(direPath, true);
+                Directory.CreateDirectory(direPath);
+            }
+            else
+            {
+                Directory.CreateDirectory(direPath);
+            }
+            if (Directory.Exists(zipPath))
+            {
+                Directory.Delete(zipPath, true);
             }
             GdalConfiguration.ConfigureGdal();
             GdalConfiguration.ConfigureOgr();
@@ -535,7 +551,7 @@ namespace FileTest.Controllers
             int fieldLongitude = pFeatureDefn.GetFieldIndex("Longitude");
 
             // 獲取資料庫資料後 / 插入要素
-            var conStr = @" SELECT * FROM dbo.Info";
+            string conStr = $@"SELECT * FROM dbo.Info WHERE id in ({ids})";
             var dataset = SqlConn.DbQuery(conStr);
 
             Feature pFeature = new Feature(pFeatureDefn);
@@ -553,12 +569,15 @@ namespace FileTest.Controllers
                 pLayer.CreateFeature(pFeature);
                 pLayer.SetFeature(pFeature);
             }
-            pDriver.Register();
-            dataSource.FlushCache();
-            dataSource.Dispose();
+            pFeature.Dispose();
+            pFieldDefn.Dispose();
             pLayer.Dispose();
             pDriver.Dispose();
-            return FileResult(outputPath, "application/vnd.oasis.opendocument.spreadsheet");
+            sr.Dispose();
+            dataSource.FlushCache();
+            dataSource.Dispose();
+            ZipFile.CreateFromDirectory(direPath, zipPath);
+            return FileResult(zipPath, "application/vnd.oasis.opendocument.spreadsheet");
         }
 
         /// <summary>
@@ -566,58 +585,83 @@ namespace FileTest.Controllers
         /// </summary>
         [Route("post/uploadOds")]
         [HttpPost]
-        public void UploadOds()
+        public void UploadOdsAsync()
         {
             HttpRequest request = HttpContext.Current.Request;
+            string folderPath = $@"C:\filesUpload";
             if (request.Files.Count > 0)
             {
-                int row = 1;
-                HttpPostedFile file = request.Files[0];
-                string path = $@"C:\files\upload\{file.FileName}";
-                using (Calc calc = new Calc(path))
+                if (!Directory.Exists(folderPath))
+                    Directory.CreateDirectory(folderPath);
+                foreach (var file in request.Files)
                 {
-                    try
-                    {
-                        Table workSheet = calc.Tables[0];
-                        int columnsLength = workSheet.ColumnCount - 2;
-                        int rowsLength = workSheet.RowCount;
-                        string conStr = @"INSERT INTO Info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
-                        List<Info> infoData = new List<Info>();
-                        for (int i = 0; i < rowsLength - 1; i++)
-                        {
-                            double Lat = workSheet[row, 5].Formula.ToDouble();
-                            double Longitude = workSheet[row, 6].Formula.ToDouble();
-                            infoData.Add(new Info()
-                            {
-                                Category = workSheet[row, 1].Formula,
-                                Price = workSheet[row, 2].Formula.ToInt32(),
-                                Address = workSheet[row, 3].Formula,
-                                Phone = workSheet[row, 4].Formula,
-                                Lat = Lat,
-                                Longitude = Longitude,
-                                Location = SqlGeometry.Point(Lat, Longitude, 4326)
-                            });
-                            row++;
-                        }
-                        SqlConn.DbExecute(conStr, infoData);
-                    }
-                    catch
-                    {
-                        throw new Exception("can not upload .");
-                    }
+                    //if (file.Length > 0)
+                    //{
+                    //    if (size > _filesettings.MaxBytes) return BadRequest("Max file size exceeded");
+                    //    if (!_filesettings.IsSupported(file.FileName)) return BadRequest("Invalid file type.");
+
+                    //    var path = Path.Combine(folderPath, file.FileName);
+
+                    //    if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+
+                    //    using (var stream = new FileStream(path, FileMode.Create))
+                    //    {
+                    //        await file.CopyToAsync(stream);
+                    //        if (Path.GetExtension(file.FileName).ToLower() == ".shp")
+                    //            data.ShpPath = path;
+                    //    }
+                    //}
                 }
             }
+
+            //HttpRequest request = HttpContext.Current.Request;
+            //if (request.Files.Count > 0)
+            //{
+            //    int row = 1;
+            //    HttpPostedFile file = request.Files[0];
+            //    string path = $@"C:\files\upload\{file.FileName}";
+            //    using (Calc calc = new Calc(path))
+            //    {
+            //        try
+            //        {
+            //            Table workSheet = calc.Tables[0];
+            //            int columnsLength = workSheet.ColumnCount - 2;
+            //            int rowsLength = workSheet.RowCount;
+            //            string conStr = @"INSERT INTO Info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
+            //            List<Info> infoData = new List<Info>();
+            //            for (int i = 0; i < rowsLength - 1; i++)
+            //            {
+            //                double Lat = workSheet[row, 5].Formula.ToDouble();
+            //                double Longitude = workSheet[row, 6].Formula.ToDouble();
+            //                infoData.Add(new Info()
+            //                {
+            //                    Category = workSheet[row, 1].Formula,
+            //                    Price = workSheet[row, 2].Formula.ToInt32(),
+            //                    Address = workSheet[row, 3].Formula,
+            //                    Phone = workSheet[row, 4].Formula,
+            //                    Lat = Lat,
+            //                    Longitude = Longitude,
+            //                    Location = SqlGeometry.Point(Lat, Longitude, 4326)
+            //                });
+            //                row++;
+            //            }
+            //            SqlConn.DbExecute(conStr, infoData);
+            //        }
+            //        catch
+            //        {
+            //            throw new Exception("can not upload .");
+            //        }
         }
 
         /// <summary>
         /// 下載 Ods 檔案
         /// </summary>
         /// <returns></returns>
-        [Route("get/downloadOds")]
+        [Route("get/downloadOds/{ids}")]
         [HttpGet]
-        public HttpResponseMessage DownloadOds()
+        public HttpResponseMessage DownloadOds(string ids)
         {
-            string outputPath = @"C:\files\download\New.ods";
+            string outputPath = @"C:\files\download\download.ods";
             using (var calc = new Calc())
             {
                 try
@@ -627,10 +671,10 @@ namespace FileTest.Controllers
                     colFont = new Font("標楷體", 14, FontStyle.Bold),
                     rowFont = new Font("標楷體", 12);
                     Line line = new Line() { Color = Color.Black, OuterWidth = 20 };
-                    string conStr = @"SELECT * FROM dbo.Info";
                     int header = 0;
                     int row = 0;
                     int column = 0;
+                    string conStr = $@"SELECT * FROM dbo.Info WHERE id in ({ids})";
                     List<dynamic> dataset = SqlConn.DbQuery(conStr);
                     foreach (var rowData in dataset)
                     {
