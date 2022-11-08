@@ -51,6 +51,17 @@ using System.Web.Routing;
 using unoidl.com.sun.star.awt;
 using System.Web.WebPages;
 using System.IO.Compression;
+using System.Net.Http.Formatting;
+using System.Web.Hosting;
+using System.Diagnostics;
+using System.Data.Services.Client;
+using System.Runtime.InteropServices.ComTypes;
+using System.Web.UI.WebControls;
+using Table = OpenDocumentLib.sheet.Table;
+using System.Windows.Shapes;
+using Path = System.IO.Path;
+using Line = OpenDocumentLib.sheet.Line;
+using File = System.IO.File;
 
 namespace FileTest.Controllers
 {
@@ -261,7 +272,7 @@ namespace FileTest.Controllers
         [HttpGet]
         public HttpResponseMessage DownloadKml(string ids)
         {
-            string outputPath = $@"C:\files\download\New.kml";
+            string outputPath = $@"C:\files\download\download.kml";
             XmlTextWriter kml = new XmlTextWriter(outputPath, Encoding.UTF8);
             kml.WriteStartDocument();
             kml.WriteStartElement("kml", "http://www.opengis.net/kml/2.2"); //kml
@@ -270,10 +281,6 @@ namespace FileTest.Controllers
             kml.WriteStartElement("Schema");
             kml.WriteAttributeString("name", "shapefile");
             kml.WriteAttributeString("id", "shapefile");
-            kml.WriteStartElement("SimpleField");
-            kml.WriteAttributeString("name", "Id");
-            kml.WriteAttributeString("type", "float");
-            kml.WriteEndElement(); // Id
             kml.WriteStartElement("SimpleField");
             kml.WriteAttributeString("name", "Category");
             kml.WriteAttributeString("type", "string");
@@ -345,31 +352,44 @@ namespace FileTest.Controllers
         [HttpPost]
         public void UploadKml()
         {
-            var request = HttpContext.Current.Request;
-            var file = request.Files[0];
-            string path = $@"C:\files\upload\{file.FileName}";
-            var document = XDocument.Load(path);
-            var ns = document.Root.Name.Namespace;
-            var placemarks = document.Descendants(ns + "Placemark");
-            string conStr = "INSERT INTO info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
-            var data = new List<Info>();
-            foreach (var point in placemarks)
+            HttpRequest request = HttpContext.Current.Request;
+            string readPath = $@"C:\files\getUpload";
+            if (request.Files.Count > 0)
             {
-                string coordinate = point.Descendants(ns + "coordinates").First().Value;
-                string[] coordinateArray = coordinate.Split(",");
-                List<XElement> pointData = point.Descendants(ns + "SimpleData").ToList();
-                data.Add(new Info()
+                IEnumerable<HttpPostedFile> files = Enumerable.Range(0, request.Files.Count).
+            Select(i => request.Files[i]);
+                foreach (var file in files)
                 {
-                    Category = point.Descendants(ns + "name").First().Value,
-                    Price = (int)pointData[1],
-                    Address = (string)pointData[2],
-                    Phone = (string)pointData[3],
-                    Lat = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326).STX.Value,
-                    Longitude = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326).STY.Value,
-                    Location = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326)
-                });
+                    // 上傳位置
+                    if (!Directory.Exists(readPath))
+                        Directory.CreateDirectory(readPath);
+                    if (System.IO.File.Exists(readPath)) System.IO.File.Delete(readPath);
+                    string path = Path.Combine(readPath, file.FileName);
+                    file.SaveAs(path);
+                    var document = XDocument.Load(path);
+                    var ns = document.Root.Name.Namespace;
+                    var placemarks = document.Descendants(ns + "Placemark");
+                    string conStr = "INSERT INTO info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
+                    var data = new List<Info>();
+                    foreach (var point in placemarks)
+                    {
+                        string coordinate = point.Descendants(ns + "coordinates").First().Value;
+                        string[] coordinateArray = coordinate.Split(",");
+                        List<XElement> pointData = point.Descendants(ns + "SimpleData").ToList();
+                        data.Add(new Info()
+                        {
+                            Category = (string)pointData[1],
+                            Price = (int)pointData[2],
+                            Address = (string)pointData[3],
+                            Phone = (string)pointData[4],
+                            Lat = (double)pointData[5],
+                            Longitude = (double)pointData[6],
+                            Location = SqlGeometry.STGeomFromText(new SqlChars($"POINT ({coordinateArray[0]} {coordinateArray[1]} )"), 4326)
+                        });
+                    }
+                    SqlConn.DbExecute(conStr, data);
+                }
             }
-            SqlConn.DbExecute(conStr, data);
         }
 
         /// <summary>
@@ -380,99 +400,113 @@ namespace FileTest.Controllers
         public void UploadShp()
         {
             HttpRequest request = HttpContext.Current.Request;
-            HttpPostedFile file = request.Files[0];
-            string path = $@"C:\files\upload\{file.FileName}";
-            m_Shp.InitinalGdal();
-            // 数据源
-            Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
-            DataSource pDataSource = pDriver.Open(path, 0);
-            Layer pLayer = pDataSource.GetLayerByName(Path.GetFileNameWithoutExtension(path));
-            pLayer.GetSpatialRef();
-            // 字段结构
-            Feature pFeature = pLayer.GetNextFeature();
-            FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
-            int fieldsCount = pFeature.GetFieldCount();
-
-            List<Dictionary<string, object>> listDic = new List<Dictionary<string, object>>();
-            // 遍历要素
-            while (pFeature != null)
+            string readPath = $@"C:\files\getUpload";
+            if (request.Files.Count > 0)
             {
-                Dictionary<string, object> dicData = new Dictionary<string, object>();
-                pFeature.GetGeometryRef().ExportToWkt(out string spatialReferenceString);
-                dicData.Add("Geo", spatialReferenceString);
-                for (int i = 0; i < fieldsCount; i++)
+                string shapefile = string.Empty;
+                IEnumerable<HttpPostedFile> files = Enumerable.Range(0, request.Files.Count).
+            Select(i => request.Files[i]);
+                foreach (var file in files)
                 {
-                    FieldDefn pFieldDefn = pFeature.GetFieldDefnRef(i);
-                    string fieldName = pFieldDefn.GetName();
-                    switch (pFieldDefn.GetFieldType())
-                    {
-                        //case FieldType.OFTString:
-                        //    {
-                        //        Console.WriteLine(pFeature.GetFieldAsString(i));
-                        //        dicData.Add(fieldName, pFeature.GetFieldAsInteger(i));
-                        //    }
-                        //    break;
-                        case FieldType.OFTInteger:
-                            {
-                                Console.WriteLine(pFeature.GetFieldAsInteger(i));
-                                dicData.Add(fieldName, pFeature.GetFieldAsInteger(i));
-                            }
-                            break;
-
-                        case FieldType.OFTInteger64:
-                            {
-                                Console.WriteLine(pFeature.GetFieldAsInteger64(i));
-                                dicData.Add(fieldName, pFeature.GetFieldAsInteger64(i));
-                            }
-                            break;
-
-                        case FieldType.OFTReal:
-                            {
-                                Console.WriteLine(pFeature.GetFieldAsDouble(i));
-                                dicData.Add(fieldName, pFeature.GetFieldAsDouble(i));
-                            }
-                            break;
-
-                        case FieldType.OFTString:
-                            {
-                                //string fieldName = pFieldDefn.GetName();
-                                int fieldIndex = pFeatureDefn.GetFieldIndex(fieldName);
-                                IntPtr pIntPtr = OGR_F_GetFieldAsString(OSGeo.OGR.Feature.getCPtr(pFeature), fieldIndex);
-                                Console.WriteLine(Marshal.PtrToStringAnsi(pIntPtr));
-                                dicData.Add(fieldName, pFeature.GetFieldAsString(i));
-                                //Marshal.PtrToStringAnsi(pIntPtr)
-                            }
-                            break;
-                    }
+                    // 上傳位置
+                    if (!Directory.Exists(readPath))
+                        Directory.CreateDirectory(readPath);
+                    if (System.IO.File.Exists(readPath)) System.IO.File.Delete(readPath);
+                    string path = Path.Combine(readPath, file.FileName);
+                    file.SaveAs(path);
+                    if (Path.GetExtension(file.FileName).ToLower() == ".shp")
+                        shapefile = Path.Combine(readPath, file.FileName);
                 }
-                Console.WriteLine("----------------------------------------------");
-                listDic.Add(dicData);
-                pFeature = pLayer.GetNextFeature();
-            }
-
-            pDriver.Register();
-            pDataSource.FlushCache();
-            pDataSource.Dispose();
-            pDriver.Dispose();
-            string conStr = "INSERT INTO info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
-            var data = new List<Info>();
-            int listDicLength = listDic.Count;
-            for (int i = 0; i < listDicLength; i++)
-            {
-                data.Add(new Info()
+                m_Shp.InitinalGdal();
+                // 數據源
+                Driver pDriver = Ogr.GetDriverByName("ESRI Shapefile");
+                DataSource pDataSource = pDriver.Open(shapefile, 0);
+                Layer pLayer = pDataSource.GetLayerByName(Path.GetFileNameWithoutExtension(shapefile));
+                pLayer.GetSpatialRef();
+                // 字段結構
+                Feature pFeature = pLayer.GetNextFeature();
+                FeatureDefn pFeatureDefn = pLayer.GetLayerDefn();
+                int fieldsCount = pFeature.GetFieldCount();
+                List<Dictionary<string, object>> listDic = new List<Dictionary<string, object>>();
+                // 遍历要素
+                while (pFeature != null)
                 {
-                    Category = listDic[i]["Category"].ToString(),
-                    Price = (int)listDic[i]["Price"],
-                    Address = listDic[i]["Address"].ToString(),
-                    Phone = listDic[i]["Phone"].ToString(),
-                    Lat = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326).STX.Value,
-                    Longitude = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326).STY.Value,
-                    Location = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326)
-                });
+                    Dictionary<string, object> dicData = new Dictionary<string, object>();
+                    pFeature.GetGeometryRef().ExportToWkt(out string spatialReferenceString);
+                    dicData.Add("Geo", spatialReferenceString);
+                    for (int i = 0; i < fieldsCount; i++)
+                    {
+                        FieldDefn pFieldDefn = pFeature.GetFieldDefnRef(i);
+                        string fieldName = pFieldDefn.GetName();
+                        switch (pFieldDefn.GetFieldType())
+                        {
+                            //case FieldType.OFTString:
+                            //    {
+                            //        Console.WriteLine(pFeature.GetFieldAsString(i));
+                            //        dicData.Add(fieldName, pFeature.GetFieldAsInteger(i));
+                            //    }
+                            //    break;
+                            case FieldType.OFTInteger:
+                                {
+                                    Console.WriteLine(pFeature.GetFieldAsInteger(i));
+                                    dicData.Add(fieldName, pFeature.GetFieldAsInteger(i));
+                                }
+                                break;
+
+                            case FieldType.OFTInteger64:
+                                {
+                                    Console.WriteLine(pFeature.GetFieldAsInteger64(i));
+                                    dicData.Add(fieldName, pFeature.GetFieldAsInteger64(i));
+                                }
+                                break;
+
+                            case FieldType.OFTReal:
+                                {
+                                    Console.WriteLine(pFeature.GetFieldAsDouble(i));
+                                    dicData.Add(fieldName, pFeature.GetFieldAsDouble(i));
+                                }
+                                break;
+
+                            case FieldType.OFTString:
+                                {
+                                    //string fieldName = pFieldDefn.GetName();
+                                    int fieldIndex = pFeatureDefn.GetFieldIndex(fieldName);
+                                    IntPtr pIntPtr = OGR_F_GetFieldAsString(OSGeo.OGR.Feature.getCPtr(pFeature), fieldIndex);
+                                    Console.WriteLine(Marshal.PtrToStringAnsi(pIntPtr));
+                                    dicData.Add(fieldName, pFeature.GetFieldAsString(i));
+                                    //Marshal.PtrToStringAnsi(pIntPtr)
+                                }
+                                break;
+                        }
+                    }
+                    Console.WriteLine("----------------------------------------------");
+                    listDic.Add(dicData);
+                    pFeature = pLayer.GetNextFeature();
+                }
+                pDriver.Register();
+                pDataSource.FlushCache();
+                pDataSource.Dispose();
+                pDriver.Dispose();
+                string conStr = "INSERT INTO info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
+                var data = new List<Info>();
+                int listDicLength = listDic.Count;
+                for (int i = 0; i < listDicLength; i++)
+                {
+                    data.Add(new Info()
+                    {
+                        Category = listDic[i]["Category"].ToString(),
+                        Price = Convert.ToInt32(listDic[i]["Price"]),
+                        Address = listDic[i]["Address"].ToString(),
+                        Phone = listDic[i]["Phone"].ToString(),
+                        Lat = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326).STX.Value,
+                        Longitude = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326).STY.Value,
+                        Location = SqlGeometry.STGeomFromText(new SqlChars(listDic[i]["Geo"].ToString()), 4326)
+                    });
+                }
+                SqlConn.DbExecute(conStr, data);
+                pLayer.Dispose();
+                pDriver.Dispose();
             }
-            SqlConn.DbExecute(conStr, data);
-            pLayer.Dispose();
-            pDriver.Dispose();
         }
 
         /// <summary>
@@ -495,9 +529,9 @@ namespace FileTest.Controllers
             {
                 Directory.CreateDirectory(direPath);
             }
-            if (Directory.Exists(zipPath))
+            if (File.Exists(zipPath))
             {
-                Directory.Delete(zipPath, true);
+                File.Delete(zipPath);
             }
             GdalConfiguration.ConfigureGdal();
             GdalConfiguration.ConfigureOgr();
@@ -585,72 +619,57 @@ namespace FileTest.Controllers
         /// </summary>
         [Route("post/uploadOds")]
         [HttpPost]
-        public void UploadOdsAsync()
+        public void UploadOds()
         {
             HttpRequest request = HttpContext.Current.Request;
-            string folderPath = $@"C:\filesUpload";
+            string readPath = $@"C:\files\getUpload";
             if (request.Files.Count > 0)
             {
-                if (!Directory.Exists(folderPath))
-                    Directory.CreateDirectory(folderPath);
-                foreach (var file in request.Files)
+                IEnumerable<HttpPostedFile> files = Enumerable.Range(0, request.Files.Count)
+            .Select(i => request.Files[i]);
+                foreach (var file in files)
                 {
-                    //if (file.Length > 0)
-                    //{
-                    //    if (size > _filesettings.MaxBytes) return BadRequest("Max file size exceeded");
-                    //    if (!_filesettings.IsSupported(file.FileName)) return BadRequest("Invalid file type.");
-
-                    //    var path = Path.Combine(folderPath, file.FileName);
-
-                    //    if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
-
-                    //    using (var stream = new FileStream(path, FileMode.Create))
-                    //    {
-                    //        await file.CopyToAsync(stream);
-                    //        if (Path.GetExtension(file.FileName).ToLower() == ".shp")
-                    //            data.ShpPath = path;
-                    //    }
-                    //}
+                    // 上傳位置
+                    if (!Directory.Exists(readPath))
+                        Directory.CreateDirectory(readPath);
+                    if (System.IO.File.Exists(readPath)) System.IO.File.Delete(readPath);
+                    string path = Path.Combine(readPath, file.FileName);
+                    file.SaveAs(path);
+                    int row = 1;
+                    using (Calc calc = new Calc(path))
+                    {
+                        try
+                        {
+                            Table workSheet = calc.Tables[0];
+                            int columnsLength = workSheet.ColumnCount - 2;
+                            int rowsLength = workSheet.RowCount;
+                            string conStr = @"INSERT INTO Info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
+                            List<Info> infoData = new List<Info>();
+                            for (int i = 0; i < rowsLength - 1; i++)
+                            {
+                                double Lat = workSheet[row, 5].Formula.ToDouble();
+                                double Longitude = workSheet[row, 6].Formula.ToDouble();
+                                infoData.Add(new Info()
+                                {
+                                    Category = workSheet[row, 1].Formula,
+                                    Price = workSheet[row, 2].Formula.ToInt32(),
+                                    Address = workSheet[row, 3].Formula,
+                                    Phone = workSheet[row, 4].Formula,
+                                    Lat = Lat,
+                                    Longitude = Longitude,
+                                    Location = SqlGeometry.Point(Lat, Longitude, 4326)
+                                });
+                                row++;
+                            }
+                            SqlConn.DbExecute(conStr, infoData);
+                        }
+                        catch
+                        {
+                            throw new Exception("can not upload .");
+                        }
+                    }
                 }
             }
-
-            //HttpRequest request = HttpContext.Current.Request;
-            //if (request.Files.Count > 0)
-            //{
-            //    int row = 1;
-            //    HttpPostedFile file = request.Files[0];
-            //    string path = $@"C:\files\upload\{file.FileName}";
-            //    using (Calc calc = new Calc(path))
-            //    {
-            //        try
-            //        {
-            //            Table workSheet = calc.Tables[0];
-            //            int columnsLength = workSheet.ColumnCount - 2;
-            //            int rowsLength = workSheet.RowCount;
-            //            string conStr = @"INSERT INTO Info (Category, Price, Address, Phone, Lat, Longitude, Location) VALUES(@Category, @Price, @Address, @Phone, @Lat, @Longitude, @Location)";
-            //            List<Info> infoData = new List<Info>();
-            //            for (int i = 0; i < rowsLength - 1; i++)
-            //            {
-            //                double Lat = workSheet[row, 5].Formula.ToDouble();
-            //                double Longitude = workSheet[row, 6].Formula.ToDouble();
-            //                infoData.Add(new Info()
-            //                {
-            //                    Category = workSheet[row, 1].Formula,
-            //                    Price = workSheet[row, 2].Formula.ToInt32(),
-            //                    Address = workSheet[row, 3].Formula,
-            //                    Phone = workSheet[row, 4].Formula,
-            //                    Lat = Lat,
-            //                    Longitude = Longitude,
-            //                    Location = SqlGeometry.Point(Lat, Longitude, 4326)
-            //                });
-            //                row++;
-            //            }
-            //            SqlConn.DbExecute(conStr, infoData);
-            //        }
-            //        catch
-            //        {
-            //            throw new Exception("can not upload .");
-            //        }
         }
 
         /// <summary>

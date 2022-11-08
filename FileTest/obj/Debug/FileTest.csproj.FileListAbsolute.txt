@@ -465,3 +465,4 @@ D:\cSharp\FileTest\FileTest\bin\Microsoft.Net.Http.Headers.xml
 D:\cSharp\FileTest\FileTest\bin\System.Web.Cors.dll
 D:\cSharp\FileTest\FileTest\bin\System.Web.Http.Cors.dll
 D:\cSharp\FileTest\FileTest\bin\System.Web.Http.Cors.xml
+D:\cSharp\FileTest\FileTest\bin\MultipartDataMediaFormatter.dll
