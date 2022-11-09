@@ -72,6 +72,15 @@ namespace FileTest.Controllers
         public static Driver pDriver;
         public static DataSource dataSource;
 
+        // 根目錄
+        private static readonly string _rootFolderName = HttpContext.Current.Server.MapPath($"~");
+
+        // Shp的資料夾
+        private static readonly string _shpFolderName = HttpContext.Current.Server.MapPath($"~/Files/Shp/");
+
+        // 處理的暫存資料夾
+        private static readonly string _tempFolderName = HttpContext.Current.Server.MapPath($"~/Files/Temp/");
+
         //shp
         [DllImport("gdal204.dll", EntryPoint = "OGR_F_GetFieldAsString", CallingConvention = CallingConvention.Cdecl)]
         public static extern System.IntPtr OGR_F_GetFieldAsString(HandleRef handle, int index);
@@ -681,6 +690,7 @@ namespace FileTest.Controllers
         public HttpResponseMessage DownloadOds(string ids)
         {
             string outputPath = @"C:\files\download\download.ods";
+
             using (var calc = new Calc())
             {
                 try
